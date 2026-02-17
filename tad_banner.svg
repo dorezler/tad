@@ -1,0 +1,56 @@
+<svg width="1400" height="100" viewBox="0 0 1400 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1400" y2="0" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0B6B9E"/>
+      <stop offset="1" stop-color="#C41E6F"/>
+    </linearGradient>
+    <linearGradient id="neon" x1="0" y1="0" x2="1400" y2="0" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#5DE6FF"/>
+      <stop offset="0.5" stop-color="#8B7BFF"/>
+      <stop offset="1" stop-color="#5DE6FF"/>
+    </linearGradient>
+    <linearGradient id="glow" x1="0" y1="0" x2="0" y2="100" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#36F9FF" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#36F9FF" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="softGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="6" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <rect width="1400" height="100" rx="14" fill="url(#bg)"/>
+  <rect width="1400" height="100" rx="14" fill="url(#glow)"/>
+
+  <!-- Subtle grid -->
+  <g opacity="0.2">
+    <path d="M60 0V100" stroke="#1B2A52"/>
+    <path d="M140 0V100" stroke="#1B2A52"/>
+    <path d="M220 0V100" stroke="#1B2A52"/>
+    <path d="M300 0V100" stroke="#1B2A52"/>
+    <path d="M380 0V100" stroke="#1B2A52"/>
+    <path d="M460 0V100" stroke="#1B2A52"/>
+    <path d="M540 0V100" stroke="#1B2A52"/>
+    <path d="M620 0V100" stroke="#1B2A52"/>
+    <path d="M700 0V100" stroke="#1B2A52"/>
+    <path d="M780 0V100" stroke="#1B2A52"/>
+    <path d="M860 0V100" stroke="#1B2A52"/>
+    <path d="M940 0V100" stroke="#1B2A52"/>
+    <path d="M1020 0V100" stroke="#1B2A52"/>
+    <path d="M1100 0V100" stroke="#1B2A52"/>
+    <path d="M1180 0V100" stroke="#1B2A52"/>
+    <path d="M1260 0V100" stroke="#1B2A52"/>
+    <path d="M1340 0V100" stroke="#1B2A52"/>
+  </g>
+
+
+
+  <!-- Title -->
+  <text x="60" y="46" font-family="Helvetica" font-size="28" font-weight="700" fill="#EAF6FF">TAD</text>
+  <text x="60" y="76" font-family="Helvetica" font-size="18" font-weight="500" fill="#EAF6FF">Temperature Analysis Dashboard</text>
+
+
+</svg>
