@@ -1,7 +1,9 @@
+import pandas as pd
 from PyQt6.QtCore import Qt
 from PyQt6.QtSvgWidgets import QSvgWidget
 from PyQt6.QtWidgets import (
     QApplication,
+    QFileDialog,
     QGroupBox,
     QHBoxLayout,
     QLabel,
@@ -18,6 +20,7 @@ class TemperatureAnalysisDashboard(QMainWindow):
         super().__init__()
         main_widget = QWidget()
         main_layout = QVBoxLayout(main_widget)
+        self.df = pd.DataFrame()
         self.setCentralWidget(main_widget)
         self.setWindowTitle("TAD - Temperature Analysis Dashboard")
         self.statusBar().showMessage("Please load data to get started.")
@@ -33,7 +36,9 @@ class TemperatureAnalysisDashboard(QMainWindow):
         # Level 2 widget: load frame
         load_frame_widget = QGroupBox("Load data")
         load_layout = QHBoxLayout(load_frame_widget)
-        load_layout.addWidget(QPushButton("From disk"))
+        load_from_disk_button = QPushButton("From disk")
+        load_from_disk_button.clicked.connect(self.open_file)
+        load_layout.addWidget(load_from_disk_button)
         load_layout.addWidget(QPushButton("From network"))
         load_layout.addWidget(QLabel("Supported formats: CSV, JSON"))
         load_layout.addStretch()
@@ -86,6 +91,17 @@ class TemperatureAnalysisDashboard(QMainWindow):
         charts_layout.addWidget(charts_label)
         results_tabs_widget.addTab(charts_widget, "Visualizations")
         main_layout.addWidget(results_tabs_widget)
+
+    def load_csv(self, csv_file_path):
+        self.df = pd.read_csv(csv_file_path)
+        self.df = self.df[["timestamp", "sensor_id", "temperature"]]
+        self.df["timestamp"] = pd.to_datetime(self.df["timestamp"])
+        self.statusBar().showMessage(f"Loaded {csv_file_path} ({len(self.df)} rows).")
+
+    def open_file(self):
+        file_path, _ = QFileDialog.getOpenFileName(self, "Open CSV file", "", "CSV files (*.csv)")
+        if file_path.endswith(".csv"):
+            self.load_csv(file_path)
 
 
 if __name__ == "__main__":
