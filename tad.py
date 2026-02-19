@@ -6,6 +6,7 @@ from PyQt6.QtWidgets import (
     QFileDialog,
     QGroupBox,
     QHBoxLayout,
+    QInputDialog,
     QLabel,
     QMainWindow,
     QPushButton,
@@ -39,7 +40,9 @@ class TemperatureAnalysisDashboard(QMainWindow):
         load_from_disk_button = QPushButton("From disk")
         load_from_disk_button.clicked.connect(self.open_file)
         load_layout.addWidget(load_from_disk_button)
-        load_layout.addWidget(QPushButton("From network"))
+        load_from_network_button = QPushButton("From network")
+        load_from_network_button.clicked.connect(self.open_network_file)
+        load_layout.addWidget(load_from_network_button)
         load_layout.addWidget(QLabel("Supported formats: CSV, JSON"))
         load_layout.addStretch()
         load_save_layout.addWidget(load_frame_widget)
@@ -102,6 +105,12 @@ class TemperatureAnalysisDashboard(QMainWindow):
         file_path, _ = QFileDialog.getOpenFileName(self, "Open CSV file", "", "CSV files (*.csv)")
         if file_path.endswith(".csv"):
             self.load_csv(file_path)
+
+    def open_network_file(self):
+        url, ok = QInputDialog.getText(self, "Load CSV from network", "CSV URL:")
+        if not ok or not url.strip():
+            return
+        self.load_csv(url.strip())
 
 
 if __name__ == "__main__":
