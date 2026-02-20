@@ -49,7 +49,9 @@ class TemperatureAnalysisDashboard(QMainWindow):
         # Level 2 widget: save frame
         save_frame_widget = QGroupBox("Save data")
         save_layout = QHBoxLayout(save_frame_widget)
-        save_layout.addWidget(QPushButton("Save as"))
+        save_as_button = QPushButton("Save as")
+        save_as_button.clicked.connect(self.save_file)
+        save_layout.addWidget(save_as_button)
         save_layout.addWidget(QLabel("Supported formats: CSV, JSON, PDF report"))
         save_layout.addStretch()
         load_save_layout.addWidget(save_frame_widget)
@@ -111,6 +113,15 @@ class TemperatureAnalysisDashboard(QMainWindow):
         if not ok or not url.strip():
             return
         self.load_csv(url.strip())
+
+    def save_file(self):
+        csv_file_path, _ = QFileDialog.getSaveFileName(self, "Save CSV file", "", "CSV files (*.csv)")
+        if not csv_file_path:
+            return
+        if not csv_file_path.lower().endswith(".csv"):
+            csv_file_path = f"{csv_file_path}.csv"
+        self.df.to_csv(csv_file_path, index=False)
+        self.statusBar().showMessage(f"Saved data to {csv_file_path} ({len(self.df)} rows).")
 
 
 if __name__ == "__main__":
