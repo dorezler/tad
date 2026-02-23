@@ -115,13 +115,20 @@ class TemperatureAnalysisDashboard(QMainWindow):
         self.load_csv(url.strip())
 
     def save_file(self):
-        csv_file_path, _ = QFileDialog.getSaveFileName(self, "Save CSV file", "", "CSV files (*.csv)")
-        if not csv_file_path:
+        file_path, selected_filter = QFileDialog.getSaveFileName(
+            self, "Save data file", "", "CSV files (*.csv);;JSON files (*.json)"
+        )
+        if not file_path:
             return
-        if not csv_file_path.lower().endswith(".csv"):
-            csv_file_path = f"{csv_file_path}.csv"
-        self.df.to_csv(csv_file_path, index=False)
-        self.statusBar().showMessage(f"Saved data to {csv_file_path} ({len(self.df)} rows).")
+        if selected_filter.startswith("JSON") or file_path.lower().endswith(".json"):
+            if not file_path.lower().endswith(".json"):
+                file_path = f"{file_path}.json"
+            self.df.to_json(file_path, date_format="iso", indent=2, orient="records")
+        else:
+            if not file_path.lower().endswith(".csv"):
+                file_path = f"{file_path}.csv"
+            self.df.to_csv(file_path, index=False)
+        self.statusBar().showMessage(f"Saved data to {file_path} ({len(self.df)} rows).")
 
 
 if __name__ == "__main__":
