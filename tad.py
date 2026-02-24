@@ -5,11 +5,14 @@ from PyQt6.QtWidgets import (
     QApplication,
     QFileDialog,
     QGroupBox,
+    QHeaderView,
     QHBoxLayout,
     QInputDialog,
     QLabel,
     QMainWindow,
     QPushButton,
+    QTableWidget,
+    QTableWidgetItem,
     QTabWidget,
     QVBoxLayout,
     QWidget,
@@ -77,9 +80,14 @@ class TemperatureAnalysisDashboard(QMainWindow):
         # Level 2 widget: data table tab
         table_widget = QWidget()
         table_layout = QVBoxLayout(table_widget)
-        table_label = QLabel("Please load data to get started.")
-        table_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        table_layout.addWidget(table_label)
+        self.table_label = QLabel("Please load data to get started.")
+        self.table_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        table_layout.addWidget(self.table_label)
+        self.data_table = QTableWidget()
+        self.data_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.data_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.data_table.setVisible(False)
+        table_layout.addWidget(self.data_table)
         results_tabs_widget.addTab(table_widget, "Data")
         # Level 2 widget: statistics tab
         stats_widget = QWidget()
@@ -101,6 +109,7 @@ class TemperatureAnalysisDashboard(QMainWindow):
         self.df = pd.read_csv(csv_file_path)
         self.df = self.df[["timestamp", "sensor_id", "temperature"]]
         self.df["timestamp"] = pd.to_datetime(self.df["timestamp"])
+        self.update_data_table()
         self.statusBar().showMessage(f"Loaded {csv_file_path} ({len(self.df)} rows).")
 
     def open_file(self):
@@ -129,6 +138,20 @@ class TemperatureAnalysisDashboard(QMainWindow):
                 file_path = f"{file_path}.csv"
             self.df.to_csv(file_path, index=False)
         self.statusBar().showMessage(f"Saved data to {file_path} ({len(self.df)} rows).")
+
+    def update_data_table(self):
+        if self.df.empty:
+            self.table_label.setVisible(True)
+            self.data_table.setVisible(False)
+            return
+        self.table_label.setVisible(False)
+        self.data_table.setVisible(True)
+        self.data_table.setRowCount(len(self.df))
+        self.data_table.setColumnCount(len(self.df.columns))
+        self.data_table.setHorizontalHeaderLabels([str(column) for column in self.df.columns])
+        for row_index, row in self.df.iterrows():
+            for column_index, value in enumerate(row):
+                self.data_table.setItem(row_index, column_index, QTableWidgetItem(str(value)))
 
 
 if __name__ == "__main__":
