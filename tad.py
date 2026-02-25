@@ -92,9 +92,9 @@ class TemperatureAnalysisDashboard(QMainWindow):
         # Level 2 widget: statistics tab
         stats_widget = QWidget()
         stats_layout = QVBoxLayout(stats_widget)
-        stats_label = QLabel("Please load data to get started.")
-        stats_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        stats_layout.addWidget(stats_label)
+        self.stats_label = QLabel("Please load data to get started.")
+        self.stats_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        stats_layout.addWidget(self.stats_label)
         results_tabs_widget.addTab(stats_widget, "Statistics")
         # Level 2 widget: visualizations tab
         charts_widget = QWidget()
@@ -110,6 +110,7 @@ class TemperatureAnalysisDashboard(QMainWindow):
         self.df = self.df[["timestamp", "sensor_id", "temperature"]]
         self.df["timestamp"] = pd.to_datetime(self.df["timestamp"])
         self.update_data_table()
+        self.update_statistics_label()
         self.statusBar().showMessage(f"Loaded {csv_file_path} ({len(self.df)} rows).")
 
     def open_file(self):
@@ -152,6 +153,12 @@ class TemperatureAnalysisDashboard(QMainWindow):
         for row_index, row in self.df.iterrows():
             for column_index, value in enumerate(row):
                 self.data_table.setItem(row_index, column_index, QTableWidgetItem(str(value)))
+
+    def update_statistics_label(self):
+        if self.df.empty:
+            self.stats_label.setText("Please load data to get started.")
+            return
+        self.stats_label.setText(self.df["temperature"].describe().to_string())
 
 
 if __name__ == "__main__":
