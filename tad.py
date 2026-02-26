@@ -113,10 +113,25 @@ class TemperatureAnalysisDashboard(QMainWindow):
         self.update_statistics_label()
         self.statusBar().showMessage(f"Loaded {csv_file_path} ({len(self.df)} rows).")
 
+    def load_json(self, json_file_path):
+        self.df = pd.read_json(json_file_path, orient="records")
+        self.df = self.df[["timestamp", "sensor_id", "temperature"]]
+        self.df["timestamp"] = pd.to_datetime(self.df["timestamp"])
+        self.update_data_table()
+        self.update_statistics_label()
+        self.statusBar().showMessage(f"Loaded {json_file_path} ({len(self.df)} rows).")
+
     def open_file(self):
-        file_path, _ = QFileDialog.getOpenFileName(self, "Open CSV file", "", "CSV files (*.csv)")
-        if file_path.endswith(".csv"):
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Open data file",
+            "",
+            "CSV files (*.csv);;JSON files (*.json)",
+        )
+        if file_path.lower().endswith(".csv"):
             self.load_csv(file_path)
+        elif file_path.lower().endswith(".json"):
+            self.load_json(file_path)
 
     def open_network_file(self):
         url, ok = QInputDialog.getText(self, "Load CSV from network", "CSV URL:")
