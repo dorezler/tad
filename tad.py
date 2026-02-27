@@ -1,4 +1,5 @@
 import pandas as pd
+import requests
 from PyQt6.QtCore import Qt
 from PyQt6.QtSvgWidgets import QSvgWidget
 from PyQt6.QtWidgets import (
@@ -134,10 +135,20 @@ class TemperatureAnalysisDashboard(QMainWindow):
             self.load_json(file_path)
 
     def open_network_file(self):
-        url, ok = QInputDialog.getText(self, "Load CSV from network", "CSV URL:")
+        url, ok = QInputDialog.getText(self, "Load data from network", "Data URL:")
         if not ok or not url.strip():
             return
-        self.load_csv(url.strip())
+        url = url.strip()
+        try:
+            response = requests.get(url, timeout=10)
+            self.df = pd.DataFrame.from_records(response.json())
+        except Exception:
+            self.df = pd.read_csv(url)
+        self.df = self.df[["timestamp", "sensor_id", "temperature"]]
+        self.df["timestamp"] = pd.to_datetime(self.df["timestamp"])
+        self.update_data_table()
+        self.update_statistics_label()
+        self.statusBar().showMessage(f"Loaded {url} ({len(self.df)} rows).")
 
     def save_file(self):
         file_path, selected_filter = QFileDialog.getSaveFileName(
