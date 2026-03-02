@@ -108,19 +108,11 @@ class TemperatureAnalysisDashboard(QMainWindow):
 
     def load_csv(self, csv_file_path):
         self.df = pd.read_csv(csv_file_path)
-        self.df = self.df[["timestamp", "sensor_id", "temperature"]]
-        self.df["timestamp"] = pd.to_datetime(self.df["timestamp"])
-        self.update_data_table()
-        self.update_statistics_label()
-        self.statusBar().showMessage(f"Loaded {csv_file_path} ({len(self.df)} rows).")
+        self.process_loaded_data(csv_file_path)
 
     def load_json(self, json_file_path):
         self.df = pd.read_json(json_file_path, orient="records")
-        self.df = self.df[["timestamp", "sensor_id", "temperature"]]
-        self.df["timestamp"] = pd.to_datetime(self.df["timestamp"])
-        self.update_data_table()
-        self.update_statistics_label()
-        self.statusBar().showMessage(f"Loaded {json_file_path} ({len(self.df)} rows).")
+        self.process_loaded_data(json_file_path)
 
     def open_file(self):
         file_path, _ = QFileDialog.getOpenFileName(
@@ -144,11 +136,14 @@ class TemperatureAnalysisDashboard(QMainWindow):
             self.df = pd.DataFrame.from_records(response.json())
         except Exception:
             self.df = pd.read_csv(url)
+        self.process_loaded_data(url)
+
+    def process_loaded_data(self, data_source):
         self.df = self.df[["timestamp", "sensor_id", "temperature"]]
         self.df["timestamp"] = pd.to_datetime(self.df["timestamp"])
         self.update_data_table()
         self.update_statistics_label()
-        self.statusBar().showMessage(f"Loaded {url} ({len(self.df)} rows).")
+        self.statusBar().showMessage(f"Loaded {data_source} ({len(self.df)} rows).")
 
     def save_file(self):
         file_path, selected_filter = QFileDialog.getSaveFileName(
