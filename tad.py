@@ -1,5 +1,8 @@
 import pandas as pd
 import requests
+from matplotlib import colormaps
+from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
+from matplotlib.figure import Figure
 from PyQt6.QtCore import Qt
 from PyQt6.QtSvgWidgets import QSvgWidget
 from PyQt6.QtWidgets import (
@@ -18,6 +21,12 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+
+
+class ChartsCanvas(FigureCanvasQTAgg):
+    def __init__(self):
+        self.figure = Figure(figsize=(10, 4), tight_layout=True)
+        super().__init__(self.figure)
 
 
 class TemperatureAnalysisDashboard(QMainWindow):
@@ -100,9 +109,12 @@ class TemperatureAnalysisDashboard(QMainWindow):
         # Level 2 widget: visualizations tab
         charts_widget = QWidget()
         charts_layout = QVBoxLayout(charts_widget)
-        charts_label = QLabel("Please load data to get started.")
-        charts_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        charts_layout.addWidget(charts_label)
+        self.charts_label = QLabel("Please load data to get started.")
+        self.charts_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        charts_layout.addWidget(self.charts_label)
+        self.charts_canvas = ChartsCanvas()
+        self.charts_canvas.setVisible(False)
+        charts_layout.addWidget(self.charts_canvas)
         results_tabs_widget.addTab(charts_widget, "Visualizations")
         main_layout.addWidget(results_tabs_widget)
 
@@ -143,6 +155,7 @@ class TemperatureAnalysisDashboard(QMainWindow):
         self.df["timestamp"] = pd.to_datetime(self.df["timestamp"])
         self.update_data_table()
         self.update_statistics_label()
+        self.update_visualizations()
         self.statusBar().showMessage(f"Loaded {data_source} ({len(self.df)} rows).")
 
     def save_file(self):
@@ -180,6 +193,37 @@ class TemperatureAnalysisDashboard(QMainWindow):
             self.stats_label.setText("Please load data to get started.")
             return
         self.stats_label.setText(self.df["temperature"].describe().to_string())
+
+    def update_visualizations(self):
+        if self.df.empty:
+            self.charts_label.setVisible(True)
+            self.charts_canvas.setVisible(False)
+            return
+        self.charts_label.setVisible(False)
+        self.charts_canvas.setVisible(True)
+        figure = self.charts_canvas.figure
+        figure.clear()
+        line_chart_axis = figure.add_subplot(1, 2, 1)
+        histogram_axis = figure.add_subplot(1, 2, 2)
+        line_chart_data = self.df.sort_values("timestamp")
+        line_color_map = colormaps["tab10"]
+        sensors_count = line_chart_data["sensor_id"].nunique()
+        for index, (sensor_id, sensor_data) in enumerate(line_chart_data.groupby("sensor_id")):
+            color_position = index / max(sensors_count - 1, 1)
+            line_chart_axis.plot(
+                sensor_data["timestamp"],
+                sensor_data["temperature"],
+                label=str(sensor_id),
+                color=line_color_map(color_position),
+            )
+        line_chart_axis.set_title("Temperature over time")
+        line_chart_axis.set_xlabel("Time")
+        line_chart_axis.set_ylabel("Temperature")
+        histogram_axis.hist(self.df["temperature"], bins=20, color="#A7D8F0", edgecolor="white", linewidth=0.7)
+        histogram_axis.set_title("Temperature histogram")
+        histogram_axis.set_xlabel("Temperature")
+        histogram_axis.set_ylabel("Count")
+        self.charts_canvas.draw_idle()
 
 
 if __name__ == "__main__":
