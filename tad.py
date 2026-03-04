@@ -8,6 +8,7 @@ from PyQt6.QtSvgWidgets import QSvgWidget
 from PyQt6.QtWidgets import (
     QApplication,
     QFileDialog,
+    QGridLayout,
     QGroupBox,
     QHeaderView,
     QHBoxLayout,
@@ -15,6 +16,7 @@ from PyQt6.QtWidgets import (
     QLabel,
     QMainWindow,
     QPushButton,
+    QScrollArea,
     QTableWidget,
     QTableWidgetItem,
     QTabWidget,
@@ -105,6 +107,19 @@ class TemperatureAnalysisDashboard(QMainWindow):
         self.stats_label = QLabel("Please load data to get started.")
         self.stats_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         stats_layout.addWidget(self.stats_label)
+        self.stats_frames_container = QWidget()
+        self.stats_frames_layout = QGridLayout(self.stats_frames_container)
+        self.stats_frames_layout.setContentsMargins(16, 0, 16, 0)
+        self.stats_frames_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        self.stats_frames_layout.setHorizontalSpacing(16)
+        self.stats_frames_layout.setVerticalSpacing(16)
+        for column_index in range(4):
+            self.stats_frames_layout.setColumnStretch(column_index, 1)
+        self.stats_scroll_area = QScrollArea()
+        self.stats_scroll_area.setWidgetResizable(True)
+        self.stats_scroll_area.setWidget(self.stats_frames_container)
+        self.stats_scroll_area.setVisible(False)
+        stats_layout.addWidget(self.stats_scroll_area)
         results_tabs_widget.addTab(stats_widget, "Statistics")
         # Level 2 widget: visualizations tab
         charts_widget = QWidget()
@@ -190,9 +205,44 @@ class TemperatureAnalysisDashboard(QMainWindow):
 
     def update_statistics_label(self):
         if self.df.empty:
+            self.stats_label.setVisible(True)
             self.stats_label.setText("Please load data to get started.")
+            self.stats_scroll_area.setVisible(False)
+            while self.stats_frames_layout.count():
+                item = self.stats_frames_layout.takeAt(0)
+                widget = item.widget()
+                if widget is not None:
+                    widget.deleteLater()
             return
-        self.stats_label.setText(self.df["temperature"].describe().to_string())
+        self.stats_label.setVisible(False)
+        self.stats_scroll_area.setVisible(True)
+        while self.stats_frames_layout.count():
+            item = self.stats_frames_layout.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.deleteLater()
+
+        global_stats_box = QGroupBox("Global statistics (all sensors)")
+        global_stats_layout = QVBoxLayout(global_stats_box)
+        global_stats_label = QLabel(
+            self.df["temperature"].describe().to_string(float_format=lambda value: f"{value:.1f}")
+        )
+        global_stats_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        global_stats_layout.addWidget(global_stats_label)
+        self.stats_frames_layout.addWidget(global_stats_box, 0, 0, 1, 4)
+
+        for index, (sensor_id, sensor_data) in enumerate(self.df.groupby("sensor_id")):
+            sensor_stats_box = QGroupBox(f"Sensor {sensor_id}")
+            sensor_stats_layout = QVBoxLayout(sensor_stats_box)
+            sensor_stats_text = (
+                sensor_data["temperature"].describe().to_string(float_format=lambda value: f"{value:.1f}")
+            )
+            sensor_stats_label = QLabel(sensor_stats_text)
+            sensor_stats_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+            sensor_stats_layout.addWidget(sensor_stats_label)
+            row_index = (index // 4) + 1
+            column_index = index % 4
+            self.stats_frames_layout.addWidget(sensor_stats_box, row_index, column_index)
 
     def update_visualizations(self):
         if self.df.empty:
