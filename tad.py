@@ -7,6 +7,7 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtSvgWidgets import QSvgWidget
 from PyQt6.QtWidgets import (
     QApplication,
+    QCheckBox,
     QFileDialog,
     QGridLayout,
     QGroupBox,
@@ -36,7 +37,9 @@ class TemperatureAnalysisDashboard(QMainWindow):
         super().__init__()
         main_widget = QWidget()
         main_layout = QVBoxLayout(main_widget)
+        self.original_df = pd.DataFrame()
         self.df = pd.DataFrame()
+        self.sensor_checkboxes = {}
         self.setCentralWidget(main_widget)
         self.setWindowTitle("TAD - Temperature Analysis Dashboard")
         self.statusBar().showMessage("Please load data to get started.")
@@ -79,6 +82,12 @@ class TemperatureAnalysisDashboard(QMainWindow):
         sensors_widget = QWidget()
         sensors_layout = QHBoxLayout(sensors_widget)
         sensors_layout.addWidget(QLabel("Sensors:"))
+        self.sensors_values_widget = QWidget()
+        self.sensors_values_layout = QHBoxLayout(self.sensors_values_widget)
+        self.sensors_values_layout.setContentsMargins(0, 0, 0, 0)
+        self.sensors_values_layout.setSpacing(8)
+        sensors_layout.addWidget(self.sensors_values_widget)
+        sensors_layout.addStretch()
         filters_layout.addWidget(sensors_widget)
         # Level 2 widget: temperature range selection with a slider
         temperature_widget = QWidget()
@@ -134,11 +143,11 @@ class TemperatureAnalysisDashboard(QMainWindow):
         main_layout.addWidget(results_tabs_widget)
 
     def load_csv(self, csv_file_path):
-        self.df = pd.read_csv(csv_file_path)
+        self.original_df = pd.read_csv(csv_file_path)
         self.process_loaded_data(csv_file_path)
 
     def load_json(self, json_file_path):
-        self.df = pd.read_json(json_file_path, orient="records")
+        self.original_df = pd.read_json(json_file_path, orient="records")
         self.process_loaded_data(json_file_path)
 
     def open_file(self):
@@ -160,18 +169,48 @@ class TemperatureAnalysisDashboard(QMainWindow):
         url = url.strip()
         try:
             response = requests.get(url, timeout=10)
-            self.df = pd.DataFrame.from_records(response.json())
+            self.original_df = pd.DataFrame.from_records(response.json())
         except Exception:
-            self.df = pd.read_csv(url)
+            self.original_df = pd.read_csv(url)
         self.process_loaded_data(url)
 
     def process_loaded_data(self, data_source):
-        self.df = self.df[["timestamp", "sensor_id", "temperature"]]
-        self.df["timestamp"] = pd.to_datetime(self.df["timestamp"])
+        self.original_df = self.original_df[["timestamp", "sensor_id", "temperature"]]
+        self.original_df["timestamp"] = pd.to_datetime(self.original_df["timestamp"])
+        self.refresh_sensor_filters()
+        self.apply_filters()
+        self.statusBar().showMessage(f"Loaded {data_source} ({len(self.original_df)} rows).")
+
+    def refresh_sensor_filters(self):
+        while self.sensors_values_layout.count():
+            item = self.sensors_values_layout.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.deleteLater()
+        self.sensor_checkboxes = {}
+        if self.original_df.empty:
+            return
+        for sensor_id in sorted(self.original_df["sensor_id"].dropna().unique()):
+            checkbox = QCheckBox(str(sensor_id))
+            checkbox.setChecked(True)
+            checkbox.stateChanged.connect(self.apply_filters)
+            self.sensors_values_layout.addWidget(checkbox)
+            self.sensor_checkboxes[sensor_id] = checkbox
+
+    def apply_filters(self):
+        if self.original_df.empty:
+            self.df = self.original_df.copy()
+        else:
+            selected_sensors = [
+                sensor_id for sensor_id, checkbox in self.sensor_checkboxes.items() if checkbox.isChecked()
+            ]
+            if selected_sensors:
+                self.df = self.original_df[self.original_df["sensor_id"].isin(selected_sensors)].copy()
+            else:
+                self.df = self.original_df.iloc[0:0].copy()
         self.update_data_table()
         self.update_statistics_label()
         self.update_visualizations()
-        self.statusBar().showMessage(f"Loaded {data_source} ({len(self.df)} rows).")
 
     def save_file(self):
         file_path, selected_filter = QFileDialog.getSaveFileName(
@@ -192,6 +231,7 @@ class TemperatureAnalysisDashboard(QMainWindow):
     def update_data_table(self):
         if self.df.empty:
             self.table_label.setVisible(True)
+            self.table_label.setText("No data for current filters.")
             self.data_table.setVisible(False)
             return
         self.table_label.setVisible(False)
@@ -199,14 +239,17 @@ class TemperatureAnalysisDashboard(QMainWindow):
         self.data_table.setRowCount(len(self.df))
         self.data_table.setColumnCount(len(self.df.columns))
         self.data_table.setHorizontalHeaderLabels([str(column) for column in self.df.columns])
-        for row_index, row in self.df.iterrows():
+        for row_index, (_, row) in enumerate(self.df.iterrows()):
             for column_index, value in enumerate(row):
                 self.data_table.setItem(row_index, column_index, QTableWidgetItem(str(value)))
 
     def update_statistics_label(self):
         if self.df.empty:
             self.stats_label.setVisible(True)
-            self.stats_label.setText("Please load data to get started.")
+            if self.original_df.empty:
+                self.stats_label.setText("Please load data to get started.")
+            else:
+                self.stats_label.setText("No data for current filters.")
             self.stats_scroll_area.setVisible(False)
             while self.stats_frames_layout.count():
                 item = self.stats_frames_layout.takeAt(0)
@@ -247,6 +290,10 @@ class TemperatureAnalysisDashboard(QMainWindow):
     def update_visualizations(self):
         if self.df.empty:
             self.charts_label.setVisible(True)
+            if self.original_df.empty:
+                self.charts_label.setText("Please load data to get started.")
+            else:
+                self.charts_label.setText("No data for current filters.")
             self.charts_canvas.setVisible(False)
             return
         self.charts_label.setVisible(False)
