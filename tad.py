@@ -8,6 +8,7 @@ from PyQt6.QtSvgWidgets import QSvgWidget
 from PyQt6.QtWidgets import (
     QApplication,
     QCheckBox,
+    QDateTimeEdit,
     QFileDialog,
     QGridLayout,
     QGroupBox,
@@ -92,7 +93,30 @@ class TemperatureAnalysisDashboard(QMainWindow):
         # Level 2 widget: temperature range selection with a slider
         temperature_widget = QWidget()
         temperature_layout = QHBoxLayout(temperature_widget)
-        temperature_layout.addWidget(QLabel("Temperature:"))
+        temperature_layout.addWidget(QLabel("Date/time range:"))
+        self.datetime_from_label = QLabel("From:")
+        self.datetime_from_label.setVisible(False)
+        temperature_layout.addWidget(self.datetime_from_label)
+        self.datetime_from_edit = QDateTimeEdit()
+        self.datetime_from_edit.setDisplayFormat("yyyy-MM-dd HH:mm:ss")
+        self.datetime_from_edit.setCalendarPopup(True)
+        self.datetime_from_edit.setVisible(False)
+        self.datetime_from_edit.dateTimeChanged.connect(self.apply_filters)
+        temperature_layout.addWidget(self.datetime_from_edit)
+        self.datetime_to_label = QLabel("To:")
+        self.datetime_to_label.setVisible(False)
+        temperature_layout.addWidget(self.datetime_to_label)
+        self.datetime_to_edit = QDateTimeEdit()
+        self.datetime_to_edit.setDisplayFormat("yyyy-MM-dd HH:mm:ss")
+        self.datetime_to_edit.setCalendarPopup(True)
+        self.datetime_to_edit.setVisible(False)
+        self.datetime_to_edit.dateTimeChanged.connect(self.apply_filters)
+        temperature_layout.addWidget(self.datetime_to_edit)
+        self.reset_datetime_button = QPushButton("Reset")
+        self.reset_datetime_button.setVisible(False)
+        self.reset_datetime_button.clicked.connect(self.reset_datetime_filters)
+        temperature_layout.addWidget(self.reset_datetime_button)
+        temperature_layout.addStretch()
         filters_layout.addWidget(temperature_widget)
         main_layout.addWidget(filters_frame_widget)
 
@@ -178,8 +202,41 @@ class TemperatureAnalysisDashboard(QMainWindow):
         self.original_df = self.original_df[["timestamp", "sensor_id", "temperature"]]
         self.original_df["timestamp"] = pd.to_datetime(self.original_df["timestamp"])
         self.refresh_sensor_filters()
+        self.refresh_datetime_filters()
         self.apply_filters()
         self.statusBar().showMessage(f"Loaded {data_source} ({len(self.original_df)} rows).")
+
+    def refresh_datetime_filters(self):
+        if self.original_df.empty:
+            self.datetime_from_label.setVisible(False)
+            self.datetime_from_edit.setVisible(False)
+            self.datetime_to_label.setVisible(False)
+            self.datetime_to_edit.setVisible(False)
+            self.reset_datetime_button.setVisible(False)
+            self.datetime_from_edit.blockSignals(True)
+            self.datetime_to_edit.blockSignals(True)
+            self.datetime_from_edit.blockSignals(False)
+            self.datetime_to_edit.blockSignals(False)
+            return
+        min_timestamp = self.original_df["timestamp"].min()
+        max_timestamp = self.original_df["timestamp"].max()
+        min_qdatetime = self.datetime_from_edit.dateTimeFromText(min_timestamp.strftime("%Y-%m-%d %H:%M:%S"))
+        max_qdatetime = self.datetime_to_edit.dateTimeFromText(max_timestamp.strftime("%Y-%m-%d %H:%M:%S"))
+        self.datetime_from_edit.blockSignals(True)
+        self.datetime_to_edit.blockSignals(True)
+        self.datetime_from_edit.setMinimumDateTime(min_qdatetime)
+        self.datetime_from_edit.setMaximumDateTime(max_qdatetime)
+        self.datetime_from_edit.setDateTime(min_qdatetime)
+        self.datetime_to_label.setVisible(True)
+        self.datetime_to_edit.setVisible(True)
+        self.datetime_to_edit.setMinimumDateTime(min_qdatetime)
+        self.datetime_to_edit.setMaximumDateTime(max_qdatetime)
+        self.datetime_to_edit.setDateTime(max_qdatetime)
+        self.datetime_from_label.setVisible(True)
+        self.datetime_from_edit.setVisible(True)
+        self.datetime_from_edit.blockSignals(False)
+        self.datetime_to_edit.blockSignals(False)
+        self.reset_datetime_button.setVisible(True)
 
     def refresh_sensor_filters(self):
         while self.sensors_values_layout.count():
@@ -197,6 +254,12 @@ class TemperatureAnalysisDashboard(QMainWindow):
             self.sensors_values_layout.addWidget(checkbox)
             self.sensor_checkboxes[sensor_id] = checkbox
 
+    def reset_datetime_filters(self):
+        if self.original_df.empty:
+            return
+        self.refresh_datetime_filters()
+        self.apply_filters()
+
     def apply_filters(self):
         if self.original_df.empty:
             self.df = self.original_df.copy()
@@ -208,6 +271,10 @@ class TemperatureAnalysisDashboard(QMainWindow):
                 self.df = self.original_df[self.original_df["sensor_id"].isin(selected_sensors)].copy()
             else:
                 self.df = self.original_df.iloc[0:0].copy()
+            if not self.df.empty and not self.datetime_from_edit.isHidden() and not self.datetime_to_edit.isHidden():
+                from_timestamp = pd.to_datetime(self.datetime_from_edit.dateTime().toString("yyyy-MM-dd HH:mm:ss"))
+                to_timestamp = pd.to_datetime(self.datetime_to_edit.dateTime().toString("yyyy-MM-dd HH:mm:ss"))
+                self.df = self.df[(self.df["timestamp"] >= from_timestamp) & (self.df["timestamp"] <= to_timestamp)]
         self.update_data_table()
         self.update_statistics_label()
         self.update_visualizations()
