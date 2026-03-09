@@ -6,6 +6,7 @@ from matplotlib.figure import Figure
 from PyQt6.QtCore import Qt
 from PyQt6.QtSvgWidgets import QSvgWidget
 from PyQt6.QtWidgets import (
+    QAbstractItemView,
     QApplication,
     QCheckBox,
     QDateTimeEdit,
@@ -41,6 +42,8 @@ class TemperatureAnalysisDashboard(QMainWindow):
         self.original_df = pd.DataFrame()
         self.df = pd.DataFrame()
         self.sensor_checkboxes = {}
+        self.table_sort_column = None
+        self.table_sort_ascending = True
         self.setCentralWidget(main_widget)
         self.setWindowTitle("TAD - Temperature Analysis Dashboard")
         self.statusBar().showMessage("Please load data to get started.")
@@ -130,7 +133,10 @@ class TemperatureAnalysisDashboard(QMainWindow):
         table_layout.addWidget(self.table_label)
         self.data_table = QTableWidget()
         self.data_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.data_table.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
         self.data_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.data_table.horizontalHeader().setSortIndicatorShown(True)
+        self.data_table.horizontalHeader().sectionClicked.connect(self.on_table_header_clicked)
         self.data_table.setVisible(False)
         table_layout.addWidget(self.data_table)
         results_tabs_widget.addTab(table_widget, "Data")
@@ -173,6 +179,17 @@ class TemperatureAnalysisDashboard(QMainWindow):
     def load_json(self, json_file_path):
         self.original_df = pd.read_json(json_file_path, orient="records")
         self.process_loaded_data(json_file_path)
+
+    def on_table_header_clicked(self, logical_index):
+        if self.df.empty or logical_index >= len(self.df.columns):
+            return
+        clicked_column = self.df.columns[logical_index]
+        if self.table_sort_column == clicked_column:
+            self.table_sort_ascending = not self.table_sort_ascending
+        else:
+            self.table_sort_column = clicked_column
+            self.table_sort_ascending = True
+        self.update_data_table()
 
     def open_file(self):
         file_path, _ = QFileDialog.getOpenFileName(
@@ -301,12 +318,21 @@ class TemperatureAnalysisDashboard(QMainWindow):
             self.table_label.setText("No data for current filters.")
             self.data_table.setVisible(False)
             return
+        display_df = self.df
+        if self.table_sort_column in self.df.columns:
+            display_df = self.df.sort_values(self.table_sort_column, ascending=self.table_sort_ascending)
+        else:
+            self.table_sort_column = None
         self.table_label.setVisible(False)
         self.data_table.setVisible(True)
-        self.data_table.setRowCount(len(self.df))
-        self.data_table.setColumnCount(len(self.df.columns))
-        self.data_table.setHorizontalHeaderLabels([str(column) for column in self.df.columns])
-        for row_index, (_, row) in enumerate(self.df.iterrows()):
+        self.data_table.setRowCount(len(display_df))
+        self.data_table.setColumnCount(len(display_df.columns))
+        self.data_table.setHorizontalHeaderLabels([str(column) for column in display_df.columns])
+        if self.table_sort_column in display_df.columns:
+            sort_column_index = display_df.columns.get_loc(self.table_sort_column)
+            sort_order = Qt.SortOrder.AscendingOrder if self.table_sort_ascending else Qt.SortOrder.DescendingOrder
+            self.data_table.horizontalHeader().setSortIndicator(sort_column_index, sort_order)
+        for row_index, (_, row) in enumerate(display_df.iterrows()):
             for column_index, value in enumerate(row):
                 self.data_table.setItem(row_index, column_index, QTableWidgetItem(str(value)))
 
