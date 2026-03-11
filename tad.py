@@ -1,3 +1,4 @@
+import numpy as np
 import pandas as pd
 import requests
 from matplotlib import colormaps
@@ -393,8 +394,10 @@ class TemperatureAnalysisDashboard(QMainWindow):
         self.charts_canvas.setVisible(True)
         figure = self.charts_canvas.figure
         figure.clear()
-        line_chart_axis = figure.add_subplot(1, 2, 1)
-        histogram_axis = figure.add_subplot(1, 2, 2)
+        line_chart_axis = figure.add_subplot(2, 2, 1)
+        histogram_axis = figure.add_subplot(2, 2, 2)
+        boxplot_axis = figure.add_subplot(2, 2, 3)
+        heatmap_axis = figure.add_subplot(2, 2, 4)
         line_chart_data = self.df.sort_values("timestamp")
         line_color_map = colormaps["tab10"]
         sensors_count = line_chart_data["sensor_id"].nunique()
@@ -413,6 +416,22 @@ class TemperatureAnalysisDashboard(QMainWindow):
         histogram_axis.set_title("Temperature histogram")
         histogram_axis.set_xlabel("Temperature")
         histogram_axis.set_ylabel("Count")
+        boxplot_axis.boxplot(
+            [sensor_data["temperature"] for _, sensor_data in line_chart_data.groupby("sensor_id")],
+            labels=[str(sensor_id) for sensor_id in line_chart_data["sensor_id"].unique()],
+        )
+        boxplot_axis.set_title("Temperature boxplot by sensor")
+        boxplot_axis.set_xlabel("Sensor")
+        boxplot_axis.set_ylabel("Temperature")
+        heatmap_data = self.df.pivot(index="sensor_id", columns="timestamp", values="temperature")
+        heatmap_axis.imshow(heatmap_data, aspect="auto", cmap="coolwarm")
+        heatmap_axis.set_title("Temperature heatmap")
+        heatmap_axis.set_xlabel("Time")
+        heatmap_axis.set_ylabel("Sensor")
+        heatmap_axis.set_xticks(np.arange(len(heatmap_data.columns)))
+        heatmap_axis.set_xticklabels([col.strftime("%H:%M") for col in heatmap_data.columns], rotation=90, fontsize=6)
+        heatmap_axis.set_yticks(np.arange(len(heatmap_data.index)))
+        heatmap_axis.set_yticklabels([str(idx) for idx in heatmap_data.index], fontsize=8)
         self.charts_canvas.draw_idle()
 
 
