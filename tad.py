@@ -35,55 +35,47 @@ class ChartsCanvas(FigureCanvasQTAgg):
         super().__init__(self.figure)
 
 
-class TemperatureAnalysisDashboard(QMainWindow):
+class Banner(QWidget):
     def __init__(self):
         super().__init__()
-        main_widget = QWidget()
-        main_layout = QVBoxLayout(main_widget)
-        self.original_df = pd.DataFrame()
-        self.df = pd.DataFrame()
-        self.sensor_checkboxes = {}
-        self.table_sort_column = None
-        self.table_sort_ascending = True
-        self.setCentralWidget(main_widget)
-        self.setWindowTitle("TAD - Temperature Analysis Dashboard")
-        self.statusBar().showMessage("Please load data to get started.")
-
-        # Level 1 widget: title banner
+        layout = QVBoxLayout(self)
         banner_widget = QSvgWidget("tad_banner.svg")
         banner_widget.setFixedHeight(100)
-        main_layout.addWidget(banner_widget)
+        layout.addWidget(banner_widget)
 
-        # Level 1 widget: load/save section
-        load_save_widget = QWidget()
-        load_save_layout = QHBoxLayout(load_save_widget)
-        # Level 2 widget: load frame
+
+class LoadSaveSection(QWidget):
+    def __init__(self, open_file_callback, open_network_callback, save_file_callback):
+        super().__init__()
+        layout = QHBoxLayout(self)
+        # Load frame
         load_frame_widget = QGroupBox("Load data")
         load_layout = QHBoxLayout(load_frame_widget)
         load_from_disk_button = QPushButton("From disk")
-        load_from_disk_button.clicked.connect(self.open_file)
+        load_from_disk_button.clicked.connect(open_file_callback)
         load_layout.addWidget(load_from_disk_button)
         load_from_network_button = QPushButton("From network")
-        load_from_network_button.clicked.connect(self.open_network_file)
+        load_from_network_button.clicked.connect(open_network_callback)
         load_layout.addWidget(load_from_network_button)
         load_layout.addWidget(QLabel("Supported formats: CSV, JSON"))
         load_layout.addStretch()
-        load_save_layout.addWidget(load_frame_widget)
-        # Level 2 widget: save frame
+        layout.addWidget(load_frame_widget)
+        # Save frame
         save_frame_widget = QGroupBox("Save data")
         save_layout = QHBoxLayout(save_frame_widget)
         save_as_button = QPushButton("Save as")
-        save_as_button.clicked.connect(self.save_file)
+        save_as_button.clicked.connect(save_file_callback)
         save_layout.addWidget(save_as_button)
         save_layout.addWidget(QLabel("Supported formats: CSV, JSON, PDF report"))
         save_layout.addStretch()
-        load_save_layout.addWidget(save_frame_widget)
-        main_layout.addWidget(load_save_widget)
+        layout.addWidget(save_frame_widget)
 
-        # Level 1 widget: filters frame
-        filters_frame_widget = QGroupBox("Filters")
-        filters_layout = QVBoxLayout(filters_frame_widget)
-        # Level 2 widget: sensor selection with checkboxes
+
+class FiltersFrame(QWidget):
+    def __init__(self, apply_filters_callback, reset_datetime_callback):
+        super().__init__()
+        layout = QVBoxLayout(self)
+        # Sensor selection
         sensors_widget = QWidget()
         sensors_layout = QHBoxLayout(sensors_widget)
         sensors_layout.addWidget(QLabel("Sensors:"))
@@ -93,8 +85,8 @@ class TemperatureAnalysisDashboard(QMainWindow):
         self.sensors_values_layout.setSpacing(8)
         sensors_layout.addWidget(self.sensors_values_widget)
         sensors_layout.addStretch()
-        filters_layout.addWidget(sensors_widget)
-        # Level 2 widget: temperature range selection with a slider
+        layout.addWidget(sensors_widget)
+        # Date/time range
         temperature_widget = QWidget()
         temperature_layout = QHBoxLayout(temperature_widget)
         temperature_layout.addWidget(QLabel("Date/time range:"))
@@ -105,7 +97,7 @@ class TemperatureAnalysisDashboard(QMainWindow):
         self.datetime_from_edit.setDisplayFormat("yyyy-MM-dd HH:mm:ss")
         self.datetime_from_edit.setCalendarPopup(True)
         self.datetime_from_edit.setVisible(False)
-        self.datetime_from_edit.dateTimeChanged.connect(self.apply_filters)
+        self.datetime_from_edit.dateTimeChanged.connect(apply_filters_callback)
         temperature_layout.addWidget(self.datetime_from_edit)
         self.datetime_to_label = QLabel("To:")
         self.datetime_to_label.setVisible(False)
@@ -114,19 +106,20 @@ class TemperatureAnalysisDashboard(QMainWindow):
         self.datetime_to_edit.setDisplayFormat("yyyy-MM-dd HH:mm:ss")
         self.datetime_to_edit.setCalendarPopup(True)
         self.datetime_to_edit.setVisible(False)
-        self.datetime_to_edit.dateTimeChanged.connect(self.apply_filters)
+        self.datetime_to_edit.dateTimeChanged.connect(apply_filters_callback)
         temperature_layout.addWidget(self.datetime_to_edit)
         self.reset_datetime_button = QPushButton("Reset")
         self.reset_datetime_button.setVisible(False)
-        self.reset_datetime_button.clicked.connect(self.reset_datetime_filters)
+        self.reset_datetime_button.clicked.connect(reset_datetime_callback)
         temperature_layout.addWidget(self.reset_datetime_button)
         temperature_layout.addStretch()
-        filters_layout.addWidget(temperature_widget)
-        main_layout.addWidget(filters_frame_widget)
+        layout.addWidget(temperature_widget)
 
-        # Level 1 widget: results section with tabs
-        results_tabs_widget = QTabWidget()
-        # Level 2 widget: data table tab
+
+class ResultsTabs(QTabWidget):
+    def __init__(self, on_table_header_clicked):
+        super().__init__()
+        # Data table tab
         table_widget = QWidget()
         table_layout = QVBoxLayout(table_widget)
         self.table_label = QLabel("Please load data to get started.")
@@ -137,11 +130,11 @@ class TemperatureAnalysisDashboard(QMainWindow):
         self.data_table.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
         self.data_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.data_table.horizontalHeader().setSortIndicatorShown(True)
-        self.data_table.horizontalHeader().sectionClicked.connect(self.on_table_header_clicked)
+        self.data_table.horizontalHeader().sectionClicked.connect(on_table_header_clicked)
         self.data_table.setVisible(False)
         table_layout.addWidget(self.data_table)
-        results_tabs_widget.addTab(table_widget, "Data")
-        # Level 2 widget: statistics tab
+        self.addTab(table_widget, "Data")
+        # Statistics tab
         stats_widget = QWidget()
         stats_layout = QVBoxLayout(stats_widget)
         self.stats_label = QLabel("Please load data to get started.")
@@ -160,8 +153,8 @@ class TemperatureAnalysisDashboard(QMainWindow):
         self.stats_scroll_area.setWidget(self.stats_frames_container)
         self.stats_scroll_area.setVisible(False)
         stats_layout.addWidget(self.stats_scroll_area)
-        results_tabs_widget.addTab(stats_widget, "Statistics")
-        # Level 2 widget: visualizations tab
+        self.addTab(stats_widget, "Statistics")
+        # Visualizations tab
         charts_widget = QWidget()
         charts_layout = QVBoxLayout(charts_widget)
         self.charts_label = QLabel("Please load data to get started.")
@@ -170,8 +163,30 @@ class TemperatureAnalysisDashboard(QMainWindow):
         self.charts_canvas = ChartsCanvas()
         self.charts_canvas.setVisible(False)
         charts_layout.addWidget(self.charts_canvas)
-        results_tabs_widget.addTab(charts_widget, "Visualizations")
-        main_layout.addWidget(results_tabs_widget)
+        self.addTab(charts_widget, "Visualizations")
+
+
+class TemperatureAnalysisDashboard(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        main_widget = QWidget()
+        main_layout = QVBoxLayout(main_widget)
+        self.original_df = pd.DataFrame()
+        self.df = pd.DataFrame()
+        self.sensor_checkboxes = {}
+        self.table_sort_column = None
+        self.table_sort_ascending = True
+        self.setCentralWidget(main_widget)
+        self.setWindowTitle("TAD - Temperature Analysis Dashboard")
+        self.statusBar().showMessage("Please load data to get started.")
+        self.banner = Banner()
+        main_layout.addWidget(self.banner)
+        self.load_save_section = LoadSaveSection(self.open_file, self.open_network_file, self.save_file)
+        main_layout.addWidget(self.load_save_section)
+        self.filters_frame = FiltersFrame(self.apply_filters, self.reset_datetime_filters)
+        main_layout.addWidget(self.filters_frame)
+        self.results_tabs = ResultsTabs(self.on_table_header_clicked)
+        main_layout.addWidget(self.results_tabs)
 
     def load_csv(self, csv_file_path):
         self.original_df = pd.read_csv(csv_file_path)
@@ -226,39 +241,43 @@ class TemperatureAnalysisDashboard(QMainWindow):
 
     def refresh_datetime_filters(self):
         if self.original_df.empty:
-            self.datetime_from_label.setVisible(False)
-            self.datetime_from_edit.setVisible(False)
-            self.datetime_to_label.setVisible(False)
-            self.datetime_to_edit.setVisible(False)
-            self.reset_datetime_button.setVisible(False)
-            self.datetime_from_edit.blockSignals(True)
-            self.datetime_to_edit.blockSignals(True)
-            self.datetime_from_edit.blockSignals(False)
-            self.datetime_to_edit.blockSignals(False)
+            self.filters_frame.datetime_from_label.setVisible(False)
+            self.filters_frame.datetime_from_edit.setVisible(False)
+            self.filters_frame.datetime_to_label.setVisible(False)
+            self.filters_frame.datetime_to_edit.setVisible(False)
+            self.filters_frame.reset_datetime_button.setVisible(False)
+            self.filters_frame.datetime_from_edit.blockSignals(True)
+            self.filters_frame.datetime_to_edit.blockSignals(True)
+            self.filters_frame.datetime_from_edit.blockSignals(False)
+            self.filters_frame.datetime_to_edit.blockSignals(False)
             return
         min_timestamp = self.original_df["timestamp"].min()
         max_timestamp = self.original_df["timestamp"].max()
-        min_qdatetime = self.datetime_from_edit.dateTimeFromText(min_timestamp.strftime("%Y-%m-%d %H:%M:%S"))
-        max_qdatetime = self.datetime_to_edit.dateTimeFromText(max_timestamp.strftime("%Y-%m-%d %H:%M:%S"))
-        self.datetime_from_edit.blockSignals(True)
-        self.datetime_to_edit.blockSignals(True)
-        self.datetime_from_edit.setMinimumDateTime(min_qdatetime)
-        self.datetime_from_edit.setMaximumDateTime(max_qdatetime)
-        self.datetime_from_edit.setDateTime(min_qdatetime)
-        self.datetime_to_label.setVisible(True)
-        self.datetime_to_edit.setVisible(True)
-        self.datetime_to_edit.setMinimumDateTime(min_qdatetime)
-        self.datetime_to_edit.setMaximumDateTime(max_qdatetime)
-        self.datetime_to_edit.setDateTime(max_qdatetime)
-        self.datetime_from_label.setVisible(True)
-        self.datetime_from_edit.setVisible(True)
-        self.datetime_from_edit.blockSignals(False)
-        self.datetime_to_edit.blockSignals(False)
-        self.reset_datetime_button.setVisible(True)
+        min_qdatetime = self.filters_frame.datetime_from_edit.dateTimeFromText(
+            min_timestamp.strftime("%Y-%m-%d %H:%M:%S")
+        )
+        max_qdatetime = self.filters_frame.datetime_to_edit.dateTimeFromText(
+            max_timestamp.strftime("%Y-%m-%d %H:%M:%S")
+        )
+        self.filters_frame.datetime_from_edit.blockSignals(True)
+        self.filters_frame.datetime_to_edit.blockSignals(True)
+        self.filters_frame.datetime_from_edit.setMinimumDateTime(min_qdatetime)
+        self.filters_frame.datetime_from_edit.setMaximumDateTime(max_qdatetime)
+        self.filters_frame.datetime_from_edit.setDateTime(min_qdatetime)
+        self.filters_frame.datetime_to_label.setVisible(True)
+        self.filters_frame.datetime_to_edit.setVisible(True)
+        self.filters_frame.datetime_to_edit.setMinimumDateTime(min_qdatetime)
+        self.filters_frame.datetime_to_edit.setMaximumDateTime(max_qdatetime)
+        self.filters_frame.datetime_to_edit.setDateTime(max_qdatetime)
+        self.filters_frame.datetime_from_label.setVisible(True)
+        self.filters_frame.datetime_from_edit.setVisible(True)
+        self.filters_frame.datetime_from_edit.blockSignals(False)
+        self.filters_frame.datetime_to_edit.blockSignals(False)
+        self.filters_frame.reset_datetime_button.setVisible(True)
 
     def refresh_sensor_filters(self):
-        while self.sensors_values_layout.count():
-            item = self.sensors_values_layout.takeAt(0)
+        while self.filters_frame.sensors_values_layout.count():
+            item = self.filters_frame.sensors_values_layout.takeAt(0)
             widget = item.widget()
             if widget is not None:
                 widget.deleteLater()
@@ -269,7 +288,7 @@ class TemperatureAnalysisDashboard(QMainWindow):
             checkbox = QCheckBox(str(sensor_id))
             checkbox.setChecked(True)
             checkbox.stateChanged.connect(self.apply_filters)
-            self.sensors_values_layout.addWidget(checkbox)
+            self.filters_frame.sensors_values_layout.addWidget(checkbox)
             self.sensor_checkboxes[sensor_id] = checkbox
 
     def reset_datetime_filters(self):
@@ -289,9 +308,17 @@ class TemperatureAnalysisDashboard(QMainWindow):
                 self.df = self.original_df[self.original_df["sensor_id"].isin(selected_sensors)].copy()
             else:
                 self.df = self.original_df.iloc[0:0].copy()
-            if not self.df.empty and not self.datetime_from_edit.isHidden() and not self.datetime_to_edit.isHidden():
-                from_timestamp = pd.to_datetime(self.datetime_from_edit.dateTime().toString("yyyy-MM-dd HH:mm:ss"))
-                to_timestamp = pd.to_datetime(self.datetime_to_edit.dateTime().toString("yyyy-MM-dd HH:mm:ss"))
+            if (
+                not self.df.empty
+                and not self.filters_frame.datetime_from_edit.isHidden()
+                and not self.filters_frame.datetime_to_edit.isHidden()
+            ):
+                from_timestamp = pd.to_datetime(
+                    self.filters_frame.datetime_from_edit.dateTime().toString("yyyy-MM-dd HH:mm:ss")
+                )
+                to_timestamp = pd.to_datetime(
+                    self.filters_frame.datetime_to_edit.dateTime().toString("yyyy-MM-dd HH:mm:ss")
+                )
                 self.df = self.df[(self.df["timestamp"] >= from_timestamp) & (self.df["timestamp"] <= to_timestamp)]
         self.update_data_table()
         self.update_statistics_label()
@@ -315,46 +342,46 @@ class TemperatureAnalysisDashboard(QMainWindow):
 
     def update_data_table(self):
         if self.df.empty:
-            self.table_label.setVisible(True)
-            self.table_label.setText("No data for current filters.")
-            self.data_table.setVisible(False)
+            self.results_tabs.table_label.setVisible(True)
+            self.results_tabs.table_label.setText("No data for current filters.")
+            self.results_tabs.data_table.setVisible(False)
             return
         display_df = self.df
         if self.table_sort_column in self.df.columns:
             display_df = self.df.sort_values(self.table_sort_column, ascending=self.table_sort_ascending)
         else:
             self.table_sort_column = None
-        self.table_label.setVisible(False)
-        self.data_table.setVisible(True)
-        self.data_table.setRowCount(len(display_df))
-        self.data_table.setColumnCount(len(display_df.columns))
-        self.data_table.setHorizontalHeaderLabels([str(column) for column in display_df.columns])
+        self.results_tabs.table_label.setVisible(False)
+        self.results_tabs.data_table.setVisible(True)
+        self.results_tabs.data_table.setRowCount(len(display_df))
+        self.results_tabs.data_table.setColumnCount(len(display_df.columns))
+        self.results_tabs.data_table.setHorizontalHeaderLabels([str(column) for column in display_df.columns])
         if self.table_sort_column in display_df.columns:
             sort_column_index = display_df.columns.get_loc(self.table_sort_column)
             sort_order = Qt.SortOrder.AscendingOrder if self.table_sort_ascending else Qt.SortOrder.DescendingOrder
-            self.data_table.horizontalHeader().setSortIndicator(sort_column_index, sort_order)
+            self.results_tabs.data_table.horizontalHeader().setSortIndicator(sort_column_index, sort_order)
         for row_index, (_, row) in enumerate(display_df.iterrows()):
             for column_index, value in enumerate(row):
-                self.data_table.setItem(row_index, column_index, QTableWidgetItem(str(value)))
+                self.results_tabs.data_table.setItem(row_index, column_index, QTableWidgetItem(str(value)))
 
     def update_statistics_label(self):
         if self.df.empty:
-            self.stats_label.setVisible(True)
+            self.results_tabs.stats_label.setVisible(True)
             if self.original_df.empty:
-                self.stats_label.setText("Please load data to get started.")
+                self.results_tabs.stats_label.setText("Please load data to get started.")
             else:
-                self.stats_label.setText("No data for current filters.")
-            self.stats_scroll_area.setVisible(False)
-            while self.stats_frames_layout.count():
-                item = self.stats_frames_layout.takeAt(0)
+                self.results_tabs.stats_label.setText("No data for current filters.")
+            self.results_tabs.stats_scroll_area.setVisible(False)
+            while self.results_tabs.stats_frames_layout.count():
+                item = self.results_tabs.stats_frames_layout.takeAt(0)
                 widget = item.widget()
                 if widget is not None:
                     widget.deleteLater()
             return
-        self.stats_label.setVisible(False)
-        self.stats_scroll_area.setVisible(True)
-        while self.stats_frames_layout.count():
-            item = self.stats_frames_layout.takeAt(0)
+        self.results_tabs.stats_label.setVisible(False)
+        self.results_tabs.stats_scroll_area.setVisible(True)
+        while self.results_tabs.stats_frames_layout.count():
+            item = self.results_tabs.stats_frames_layout.takeAt(0)
             widget = item.widget()
             if widget is not None:
                 widget.deleteLater()
@@ -366,7 +393,7 @@ class TemperatureAnalysisDashboard(QMainWindow):
         )
         global_stats_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         global_stats_layout.addWidget(global_stats_label)
-        self.stats_frames_layout.addWidget(global_stats_box, 0, 0, 1, 4)
+        self.results_tabs.stats_frames_layout.addWidget(global_stats_box, 0, 0, 1, 4)
 
         for index, (sensor_id, sensor_data) in enumerate(self.df.groupby("sensor_id")):
             sensor_stats_box = QGroupBox(f"Sensor {sensor_id}")
@@ -379,20 +406,20 @@ class TemperatureAnalysisDashboard(QMainWindow):
             sensor_stats_layout.addWidget(sensor_stats_label)
             row_index = (index // 4) + 1
             column_index = index % 4
-            self.stats_frames_layout.addWidget(sensor_stats_box, row_index, column_index)
+            self.results_tabs.stats_frames_layout.addWidget(sensor_stats_box, row_index, column_index)
 
     def update_visualizations(self):
         if self.df.empty:
-            self.charts_label.setVisible(True)
+            self.results_tabs.charts_label.setVisible(True)
             if self.original_df.empty:
-                self.charts_label.setText("Please load data to get started.")
+                self.results_tabs.charts_label.setText("Please load data to get started.")
             else:
-                self.charts_label.setText("No data for current filters.")
-            self.charts_canvas.setVisible(False)
+                self.results_tabs.charts_label.setText("No data for current filters.")
+            self.results_tabs.charts_canvas.setVisible(False)
             return
-        self.charts_label.setVisible(False)
-        self.charts_canvas.setVisible(True)
-        figure = self.charts_canvas.figure
+        self.results_tabs.charts_label.setVisible(False)
+        self.results_tabs.charts_canvas.setVisible(True)
+        figure = self.results_tabs.charts_canvas.figure
         figure.clear()
         line_chart_axis = figure.add_subplot(2, 2, 1)
         histogram_axis = figure.add_subplot(2, 2, 2)
@@ -432,7 +459,7 @@ class TemperatureAnalysisDashboard(QMainWindow):
         heatmap_axis.set_xticklabels([col.strftime("%H:%M") for col in heatmap_data.columns], rotation=90, fontsize=6)
         heatmap_axis.set_yticks(np.arange(len(heatmap_data.index)))
         heatmap_axis.set_yticklabels([str(idx) for idx in heatmap_data.index], fontsize=8)
-        self.charts_canvas.draw_idle()
+        self.results_tabs.charts_canvas.draw_idle()
 
 
 if __name__ == "__main__":
