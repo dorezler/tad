@@ -220,7 +220,8 @@ class TemperatureAnalysisDashboard(QMainWindow):
             self.load_json(file_path)
 
     def open_network_file(self):
-        url, ok = QInputDialog.getText(self, "Load data from network", "Data URL:")
+        default_url = "https://raw.githubusercontent.com/dorezler/tad/refs/heads/main/test_data.csv"
+        url, ok = QInputDialog.getText(self, "Load data from network", "Data URL:", text=default_url)
         if not ok or not url.strip():
             return
         url = url.strip()
