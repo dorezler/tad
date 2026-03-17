@@ -429,6 +429,7 @@ class TemperatureAnalysisDashboard(QMainWindow):
         line_chart_data = self.df.sort_values("timestamp")
         line_color_map = colormaps["tab10"]
         sensors_count = line_chart_data["sensor_id"].nunique()
+        anomaly_label_added = False
         for index, (sensor_id, sensor_data) in enumerate(line_chart_data.groupby("sensor_id")):
             color_position = index / max(sensors_count - 1, 1)
             line_chart_axis.plot(
@@ -437,9 +438,22 @@ class TemperatureAnalysisDashboard(QMainWindow):
                 label=str(sensor_id),
                 color=line_color_map(color_position),
             )
+            sensor_std = sensor_data["temperature"].std()
+            sensor_mean = sensor_data["temperature"].mean()
+            anomalies = sensor_data[(sensor_data["temperature"] - sensor_mean).abs() > (2 * sensor_std)]
+            if not anomalies.empty:
+                line_chart_axis.scatter(
+                    anomalies["timestamp"],
+                    anomalies["temperature"],
+                    color="red",
+                    marker="x",
+                    label="Anomaly" if not anomaly_label_added else None,
+                )
+                anomaly_label_added = True
         line_chart_axis.set_title("Temperature over time")
         line_chart_axis.set_xlabel("Time")
         line_chart_axis.set_ylabel("Temperature")
+        line_chart_axis.legend()
         histogram_axis.hist(self.df["temperature"], bins=20, color="#A7D8F0", edgecolor="white", linewidth=0.7)
         histogram_axis.set_title("Temperature histogram")
         histogram_axis.set_xlabel("Temperature")
