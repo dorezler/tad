@@ -1,5 +1,12 @@
+import base64
+import io
+import os
+import tempfile
+
+import markdown
 import numpy as np
 import pandas as pd
+import pdfkit
 import requests
 from matplotlib import colormaps
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
@@ -325,9 +332,108 @@ class TemperatureAnalysisDashboard(QMainWindow):
         self.update_statistics_label()
         self.update_visualizations()
 
+    def export_to_md(self, file_path, n_rows=5, include_stats=True, include_viz=True):
+        with open(file_path, "w", encoding="utf-8") as f:
+            f.write("# TAD Data Export\n\n")
+            f.write(f"Number of rows: {len(self.df)}\n\n")
+            # Table
+            if not self.df.empty:
+                f.write(self.df.head(n_rows).to_markdown(index=False))
+                if len(self.df) > n_rows:
+                    f.write(f"\n\n(only first {n_rows} rows)\n")
+            else:
+                f.write("No data to display.\n")
+            # Statistics
+            if include_stats and not self.df.empty:
+                f.write("\n\n## Statistics\n")
+                f.write("\nGlobal statistics (all sensors):\n\n")
+                f.write(
+                    "```\n" + self.df["temperature"].describe().to_string(float_format=lambda v: f"{v:.2f}") + "\n```\n"
+                )
+                f.write("\nStatistics for each filtered sensor:\n\n")
+                for sensor_id, sensor_data in self.df.groupby("sensor_id"):
+                    f.write(f"\nSensor {sensor_id}:\n")
+                    f.write(
+                        "```\n"
+                        + sensor_data["temperature"].describe().to_string(float_format=lambda v: f"{v:.2f}")
+                        + "\n```\n"
+                    )
+            # Visualizations
+            if include_viz and not self.df.empty:
+                f.write("\n\n## Visualizations\n")
+                # Data range
+                min_date = self.df["timestamp"].min()
+                max_date = self.df["timestamp"].max()
+                data_range = f"Filtered data range: {min_date.strftime('%Y-%m-%d %H:%M:%S')} - {max_date.strftime('%Y-%m-%d %H:%M:%S')}"
+                f.write(f"\n*{data_range}*\n")
+                # Line chart
+                buf = io.BytesIO()
+                fig = Figure(figsize=(8, 4), tight_layout=True)
+                ax = fig.add_subplot(1, 1, 1)
+                for sensor_id, sensor_data in self.df.groupby("sensor_id"):
+                    ax.plot(sensor_data["timestamp"], sensor_data["temperature"], label=str(sensor_id))
+                ax.set_title("Temperature over time")
+                ax.set_xlabel("Time")
+                ax.set_ylabel("Temperature")
+                ax.legend()
+                fig.savefig(buf, format="png")
+                buf.seek(0)
+                img_base64 = base64.b64encode(buf.read()).decode("utf-8")
+                f.write(f'\n<img src="data:image/png;base64,{img_base64}" width="600"/>\n')
+                # Histogram
+                buf = io.BytesIO()
+                fig2 = Figure(figsize=(8, 4), tight_layout=True)
+                ax2 = fig2.add_subplot(1, 1, 1)
+                ax2.hist(self.df["temperature"], bins=20, color="#A7D8F0", edgecolor="white", linewidth=0.7)
+                ax2.set_title("Temperature histogram")
+                ax2.set_xlabel("Temperature")
+                ax2.set_ylabel("Count")
+                fig2.savefig(buf, format="png")
+                buf.seek(0)
+                img_base64 = base64.b64encode(buf.read()).decode("utf-8")
+                f.write(f'\n<img src="data:image/png;base64,{img_base64}" width="600"/>\n')
+                # Boxplot
+                buf = io.BytesIO()
+                fig3 = Figure(figsize=(8, 4), tight_layout=True)
+                ax3 = fig3.add_subplot(1, 1, 1)
+                grouped = [sensor_data["temperature"] for _, sensor_data in self.df.groupby("sensor_id")]
+                labels = [str(sensor_id) for sensor_id in self.df["sensor_id"].unique()]
+                ax3.boxplot(grouped, labels=labels)
+                ax3.set_title("Temperature boxplot by sensor")
+                ax3.set_xlabel("Sensor")
+                ax3.set_ylabel("Temperature")
+                fig3.savefig(buf, format="png")
+                buf.seek(0)
+                img_base64 = base64.b64encode(buf.read()).decode("utf-8")
+                f.write(f'\n<img src="data:image/png;base64,{img_base64}" width="600"/>\n')
+                # Heatmap
+                buf = io.BytesIO()
+                fig4 = Figure(figsize=(8, 4), tight_layout=True)
+                ax4 = fig4.add_subplot(1, 1, 1)
+                heatmap_data = self.df.pivot(index="sensor_id", columns="timestamp", values="temperature")
+                im = ax4.imshow(heatmap_data, aspect="auto", cmap="coolwarm")
+                ax4.set_title("Temperature heatmap")
+                ax4.set_xlabel("Time")
+                ax4.set_ylabel("Sensor")
+                fig4.colorbar(im, ax=ax4)
+                fig4.savefig(buf, format="png")
+                buf.seek(0)
+                img_base64 = base64.b64encode(buf.read()).decode("utf-8")
+                f.write(f'\n<img src="data:image/png;base64,{img_base64}" width="600"/>\n')
+            # Footer
+            f.write("\n---\nReport generated automatically by TAD.\n")
+
+    def export_md_to_pdf(self, md_path, pdf_path):
+        with open(md_path, "r", encoding="utf-8") as f:
+            md_content = f.read()
+        html_content = markdown.markdown(md_content, extensions=["tables"])
+        style = """<style>table {border-collapse: collapse;} th, td {border: 1px solid #888; padding: 4px;} th {background: #eee;}</style>"""
+        html_full = f"<html><head>{style}</head><body>{html_content}</body></html>"
+        pdfkit.from_string(html_full, pdf_path)
+
     def save_file(self):
         file_path, selected_filter = QFileDialog.getSaveFileName(
-            self, "Save data file", "", "CSV files (*.csv);;JSON files (*.json)"
+            self, "Save data file", "", "CSV files (*.csv);;JSON files (*.json);;Markdown (*.md);;PDF report (*.pdf)"
         )
         if not file_path:
             return
@@ -335,11 +441,26 @@ class TemperatureAnalysisDashboard(QMainWindow):
             if not file_path.lower().endswith(".json"):
                 file_path = f"{file_path}.json"
             self.df.to_json(file_path, date_format="iso", indent=2, orient="records")
+        elif selected_filter.startswith("Markdown") or file_path.lower().endswith(".md"):
+            if not file_path.lower().endswith(".md"):
+                file_path = f"{file_path}.md"
+            self.export_to_md(file_path, n_rows=5, include_stats=True, include_viz=True)
+            self.statusBar().showMessage(f"Saved data to {file_path} (markdown)")
+        elif selected_filter.startswith("PDF") or file_path.lower().endswith(".pdf"):
+            if not file_path.lower().endswith(".pdf"):
+                file_path = f"{file_path}.pdf"
+            with tempfile.NamedTemporaryFile(suffix=".md", delete=False) as tmp_md:
+                self.export_to_md(tmp_md.name, n_rows=5, include_stats=True, include_viz=True)
+                tmp_md_path = tmp_md.name
+            self.export_md_to_pdf(tmp_md_path, file_path)
+            os.remove(tmp_md_path)
+            self.statusBar().showMessage(f"Saved data to {file_path} (PDF)")
         else:
             if not file_path.lower().endswith(".csv"):
                 file_path = f"{file_path}.csv"
             self.df.to_csv(file_path, index=False)
-        self.statusBar().showMessage(f"Saved data to {file_path} ({len(self.df)} rows).")
+        if not (selected_filter.startswith("PDF") or file_path.lower().endswith(".pdf")):
+            self.statusBar().showMessage(f"Saved data to {file_path} ({len(self.df)} rows).")
 
     def update_data_table(self):
         if self.df.empty:
