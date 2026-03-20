@@ -195,6 +195,20 @@ class TemperatureAnalysisDashboard(QMainWindow):
         self.results_tabs = ResultsTabs(self.on_table_header_clicked)
         main_layout.addWidget(self.results_tabs)
 
+    def draw_histogram(self, axis):
+        axis.hist(self.df["temperature"], bins=20, color="#A7D8F0", edgecolor="white", linewidth=0.7)
+        axis.set_title("Temperature histogram")
+        axis.set_xlabel("Temperature")
+        axis.set_ylabel("Count")
+
+    def draw_boxplot(self, axis):
+        grouped = [sensor_data["temperature"] for _, sensor_data in self.df.groupby("sensor_id")]
+        labels = [str(sensor_id) for sensor_id in self.df["sensor_id"].unique()]
+        axis.boxplot(grouped, labels=labels)
+        axis.set_title("Temperature boxplot by sensor")
+        axis.set_xlabel("Sensor")
+        axis.set_ylabel("Temperature")
+
     def load_csv(self, csv_file_path):
         self.original_df = pd.read_csv(csv_file_path)
         self.process_loaded_data(csv_file_path)
@@ -284,11 +298,7 @@ class TemperatureAnalysisDashboard(QMainWindow):
         self.filters_frame.reset_datetime_button.setVisible(True)
 
     def refresh_sensor_filters(self):
-        while self.filters_frame.sensors_values_layout.count():
-            item = self.filters_frame.sensors_values_layout.takeAt(0)
-            widget = item.widget()
-            if widget is not None:
-                widget.deleteLater()
+        clear_layout(self.filters_frame.sensors_values_layout)
         self.sensor_checkboxes = {}
         if self.original_df.empty:
             return
@@ -367,7 +377,6 @@ class TemperatureAnalysisDashboard(QMainWindow):
                 data_range = f"Filtered data range: {min_date.strftime('%Y-%m-%d %H:%M:%S')} - {max_date.strftime('%Y-%m-%d %H:%M:%S')}"
                 f.write(f"\n*{data_range}*\n")
                 # Line chart
-                buf = io.BytesIO()
                 fig = Figure(figsize=(8, 4), tight_layout=True)
                 ax = fig.add_subplot(1, 1, 1)
                 for sensor_id, sensor_data in self.df.groupby("sensor_id"):
@@ -376,38 +385,18 @@ class TemperatureAnalysisDashboard(QMainWindow):
                 ax.set_xlabel("Time")
                 ax.set_ylabel("Temperature")
                 ax.legend()
-                fig.savefig(buf, format="png")
-                buf.seek(0)
-                img_base64 = base64.b64encode(buf.read()).decode("utf-8")
-                f.write(f'\n<img src="data:image/png;base64,{img_base64}" width="600"/>\n')
+                f.write(f"\n{fig_to_base64_img(fig)}\n")
                 # Histogram
-                buf = io.BytesIO()
                 fig2 = Figure(figsize=(8, 4), tight_layout=True)
                 ax2 = fig2.add_subplot(1, 1, 1)
-                ax2.hist(self.df["temperature"], bins=20, color="#A7D8F0", edgecolor="white", linewidth=0.7)
-                ax2.set_title("Temperature histogram")
-                ax2.set_xlabel("Temperature")
-                ax2.set_ylabel("Count")
-                fig2.savefig(buf, format="png")
-                buf.seek(0)
-                img_base64 = base64.b64encode(buf.read()).decode("utf-8")
-                f.write(f'\n<img src="data:image/png;base64,{img_base64}" width="600"/>\n')
+                self.draw_histogram(ax2)
+                f.write(f"\n{fig_to_base64_img(fig2)}\n")
                 # Boxplot
-                buf = io.BytesIO()
                 fig3 = Figure(figsize=(8, 4), tight_layout=True)
                 ax3 = fig3.add_subplot(1, 1, 1)
-                grouped = [sensor_data["temperature"] for _, sensor_data in self.df.groupby("sensor_id")]
-                labels = [str(sensor_id) for sensor_id in self.df["sensor_id"].unique()]
-                ax3.boxplot(grouped, labels=labels)
-                ax3.set_title("Temperature boxplot by sensor")
-                ax3.set_xlabel("Sensor")
-                ax3.set_ylabel("Temperature")
-                fig3.savefig(buf, format="png")
-                buf.seek(0)
-                img_base64 = base64.b64encode(buf.read()).decode("utf-8")
-                f.write(f'\n<img src="data:image/png;base64,{img_base64}" width="600"/>\n')
+                self.draw_boxplot(ax3)
+                f.write(f"\n{fig_to_base64_img(fig3)}\n")
                 # Heatmap
-                buf = io.BytesIO()
                 fig4 = Figure(figsize=(8, 4), tight_layout=True)
                 ax4 = fig4.add_subplot(1, 1, 1)
                 heatmap_data = self.df.pivot(index="sensor_id", columns="timestamp", values="temperature")
@@ -416,10 +405,7 @@ class TemperatureAnalysisDashboard(QMainWindow):
                 ax4.set_xlabel("Time")
                 ax4.set_ylabel("Sensor")
                 fig4.colorbar(im, ax=ax4)
-                fig4.savefig(buf, format="png")
-                buf.seek(0)
-                img_base64 = base64.b64encode(buf.read()).decode("utf-8")
-                f.write(f'\n<img src="data:image/png;base64,{img_base64}" width="600"/>\n')
+                f.write(f"\n{fig_to_base64_img(fig4)}\n")
             # Footer
             f.write("\n---\nReport generated automatically by TAD.\n")
 
@@ -438,17 +424,14 @@ class TemperatureAnalysisDashboard(QMainWindow):
         if not file_path:
             return
         if selected_filter.startswith("JSON") or file_path.lower().endswith(".json"):
-            if not file_path.lower().endswith(".json"):
-                file_path = f"{file_path}.json"
+            file_path = ensure_extension(file_path, ".json")
             self.df.to_json(file_path, date_format="iso", indent=2, orient="records")
         elif selected_filter.startswith("Markdown") or file_path.lower().endswith(".md"):
-            if not file_path.lower().endswith(".md"):
-                file_path = f"{file_path}.md"
+            file_path = ensure_extension(file_path, ".md")
             self.export_to_md(file_path, n_rows=5, include_stats=True, include_viz=True)
             self.statusBar().showMessage(f"Saved data to {file_path} (markdown)")
         elif selected_filter.startswith("PDF") or file_path.lower().endswith(".pdf"):
-            if not file_path.lower().endswith(".pdf"):
-                file_path = f"{file_path}.pdf"
+            file_path = ensure_extension(file_path, ".pdf")
             with tempfile.NamedTemporaryFile(suffix=".md", delete=False) as tmp_md:
                 self.export_to_md(tmp_md.name, n_rows=5, include_stats=True, include_viz=True)
                 tmp_md_path = tmp_md.name
@@ -456,8 +439,7 @@ class TemperatureAnalysisDashboard(QMainWindow):
             os.remove(tmp_md_path)
             self.statusBar().showMessage(f"Saved data to {file_path} (PDF)")
         else:
-            if not file_path.lower().endswith(".csv"):
-                file_path = f"{file_path}.csv"
+            file_path = ensure_extension(file_path, ".csv")
             self.df.to_csv(file_path, index=False)
         if not (selected_filter.startswith("PDF") or file_path.lower().endswith(".pdf")):
             self.statusBar().showMessage(f"Saved data to {file_path} ({len(self.df)} rows).")
@@ -494,19 +476,11 @@ class TemperatureAnalysisDashboard(QMainWindow):
             else:
                 self.results_tabs.stats_label.setText("No data for current filters.")
             self.results_tabs.stats_scroll_area.setVisible(False)
-            while self.results_tabs.stats_frames_layout.count():
-                item = self.results_tabs.stats_frames_layout.takeAt(0)
-                widget = item.widget()
-                if widget is not None:
-                    widget.deleteLater()
+            clear_layout(self.results_tabs.stats_frames_layout)
             return
         self.results_tabs.stats_label.setVisible(False)
         self.results_tabs.stats_scroll_area.setVisible(True)
-        while self.results_tabs.stats_frames_layout.count():
-            item = self.results_tabs.stats_frames_layout.takeAt(0)
-            widget = item.widget()
-            if widget is not None:
-                widget.deleteLater()
+        clear_layout(self.results_tabs.stats_frames_layout)
 
         global_stats_box = QGroupBox("Global statistics (all sensors)")
         global_stats_layout = QVBoxLayout(global_stats_box)
@@ -580,17 +554,8 @@ class TemperatureAnalysisDashboard(QMainWindow):
         line_chart_axis.set_xticks(unique_timestamps[x_ticks_indices])
         line_chart_axis.set_xticklabels(x_tick_labels, rotation=90, fontsize=6)
         line_chart_axis.legend()
-        histogram_axis.hist(self.df["temperature"], bins=20, color="#A7D8F0", edgecolor="white", linewidth=0.7)
-        histogram_axis.set_title("Temperature histogram")
-        histogram_axis.set_xlabel("Temperature")
-        histogram_axis.set_ylabel("Count")
-        boxplot_axis.boxplot(
-            [sensor_data["temperature"] for _, sensor_data in line_chart_data.groupby("sensor_id")],
-            labels=[str(sensor_id) for sensor_id in line_chart_data["sensor_id"].unique()],
-        )
-        boxplot_axis.set_title("Temperature boxplot by sensor")
-        boxplot_axis.set_xlabel("Sensor")
-        boxplot_axis.set_ylabel("Temperature")
+        self.draw_histogram(histogram_axis)
+        self.draw_boxplot(boxplot_axis)
         heatmap_data = self.df.pivot(index="sensor_id", columns="timestamp", values="temperature")
         heatmap_axis.imshow(heatmap_data, aspect="auto", cmap="coolwarm")
         heatmap_axis.set_title("Temperature heatmap")
@@ -603,6 +568,28 @@ class TemperatureAnalysisDashboard(QMainWindow):
         heatmap_axis.set_yticks(np.arange(len(heatmap_data.index)))
         heatmap_axis.set_yticklabels([str(idx) for idx in heatmap_data.index], fontsize=8)
         self.results_tabs.charts_canvas.draw_idle()
+
+
+def clear_layout(layout):
+    while layout.count():
+        item = layout.takeAt(0)
+        widget = item.widget()
+        if widget is not None:
+            widget.deleteLater()
+
+
+def ensure_extension(file_path, extension):
+    if not file_path.lower().endswith(extension):
+        return f"{file_path}{extension}"
+    return file_path
+
+
+def fig_to_base64_img(fig, width=600):
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png")
+    buf.seek(0)
+    img_base64 = base64.b64encode(buf.read()).decode("utf-8")
+    return f'<img src="data:image/png;base64,{img_base64}" width="{width}"/>'
 
 
 if __name__ == "__main__":
