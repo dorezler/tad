@@ -3,7 +3,6 @@ import io
 import numpy as np
 import pandas as pd
 import requests
-from matplotlib import colormaps
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
 from matplotlib.figure import Figure
 from reportlab.lib.pagesizes import A4
@@ -87,46 +86,47 @@ class LoadSaveSection(QWidget):
 class FiltersFrame(QWidget):
     def __init__(self, apply_filters_callback, reset_datetime_callback):
         super().__init__()
-        layout = QVBoxLayout(self)
+        layout = QHBoxLayout(self)
         # Sensor selection
-        sensors_widget = QWidget()
-        sensors_layout = QHBoxLayout(sensors_widget)
+        self.sensors_widget = QWidget()
+        sensors_layout = QHBoxLayout(self.sensors_widget)
         sensors_layout.addWidget(QLabel("Sensors:"))
         self.sensors_values_widget = QWidget()
         self.sensors_values_layout = QHBoxLayout(self.sensors_values_widget)
         self.sensors_values_layout.setContentsMargins(0, 0, 0, 0)
         self.sensors_values_layout.setSpacing(8)
         sensors_layout.addWidget(self.sensors_values_widget)
-        sensors_layout.addStretch()
-        layout.addWidget(sensors_widget)
+        self.sensors_widget.setVisible(False)
+        layout.addWidget(self.sensors_widget)
         # Date/time range
-        temperature_widget = QWidget()
-        temperature_layout = QHBoxLayout(temperature_widget)
-        temperature_layout.addWidget(QLabel("Date/time range:"))
+        self.datetime_range_widget = QWidget()
+        datetime_range_layout = QHBoxLayout(self.datetime_range_widget)
+        datetime_range_layout.addWidget(QLabel("Date/time range:"))
         self.datetime_from_label = QLabel("From:")
         self.datetime_from_label.setVisible(False)
-        temperature_layout.addWidget(self.datetime_from_label)
+        datetime_range_layout.addWidget(self.datetime_from_label)
         self.datetime_from_edit = QDateTimeEdit()
         self.datetime_from_edit.setDisplayFormat("yyyy-MM-dd HH:mm:ss")
         self.datetime_from_edit.setCalendarPopup(True)
         self.datetime_from_edit.setVisible(False)
         self.datetime_from_edit.dateTimeChanged.connect(apply_filters_callback)
-        temperature_layout.addWidget(self.datetime_from_edit)
+        datetime_range_layout.addWidget(self.datetime_from_edit)
         self.datetime_to_label = QLabel("To:")
         self.datetime_to_label.setVisible(False)
-        temperature_layout.addWidget(self.datetime_to_label)
+        datetime_range_layout.addWidget(self.datetime_to_label)
         self.datetime_to_edit = QDateTimeEdit()
         self.datetime_to_edit.setDisplayFormat("yyyy-MM-dd HH:mm:ss")
         self.datetime_to_edit.setCalendarPopup(True)
         self.datetime_to_edit.setVisible(False)
         self.datetime_to_edit.dateTimeChanged.connect(apply_filters_callback)
-        temperature_layout.addWidget(self.datetime_to_edit)
+        datetime_range_layout.addWidget(self.datetime_to_edit)
         self.reset_datetime_button = QPushButton("Reset")
         self.reset_datetime_button.setVisible(False)
         self.reset_datetime_button.clicked.connect(reset_datetime_callback)
-        temperature_layout.addWidget(self.reset_datetime_button)
-        temperature_layout.addStretch()
-        layout.addWidget(temperature_widget)
+        datetime_range_layout.addWidget(self.reset_datetime_button)
+        self.datetime_range_widget.setVisible(False)
+        layout.addWidget(self.datetime_range_widget)
+        layout.addStretch()
 
 
 class ResultsTabs(QTabWidget):
@@ -204,30 +204,33 @@ class TemperatureAnalysisDashboard(QMainWindow):
     def draw_boxplot(self, axis):
         grouped = [sensor_data["temperature"] for _, sensor_data in self.df.groupby("sensor_id")]
         labels = [str(sensor_id) for sensor_id in self.df["sensor_id"].unique()]
-        axis.boxplot(grouped, labels=labels)
+        axis.boxplot(grouped, tick_labels=labels)
         axis.set_title("Temperature boxplot by sensor")
         axis.set_xlabel("Sensor")
         axis.set_ylabel("Temperature")
 
-    def draw_heatmap(self, axis, include_time_ticks=False, with_colorbar=False):
+    def draw_heatmap(self, axis):
         heatmap_data = self.df.pivot(index="sensor_id", columns="timestamp", values="temperature")
         image = axis.imshow(heatmap_data, aspect="auto", cmap="coolwarm")
         axis.set_title("Temperature heatmap")
         axis.set_xlabel("Time")
         axis.set_ylabel("Sensor")
-        if include_time_ticks:
-            x_ticks_indices = np.linspace(0, len(heatmap_data.columns) - 1, 20).astype(int)
-            x_tick_labels = [heatmap_data.columns[i].strftime("%d %b\n%H:%M") for i in x_ticks_indices]
-            axis.set_xticks(x_ticks_indices)
-            axis.set_xticklabels(x_tick_labels, rotation=90, fontsize=6)
-            axis.set_yticks(np.arange(len(heatmap_data.index)))
-            axis.set_yticklabels([str(idx) for idx in heatmap_data.index], fontsize=8)
-        if with_colorbar:
-            axis.figure.colorbar(image, ax=axis)
+        axis.figure.colorbar(image, ax=axis)
+        axis.set_yticks(np.arange(len(heatmap_data.index)))
+        axis.set_yticklabels([str(idx) for idx in heatmap_data.index], fontsize=8)
         return heatmap_data
 
     def draw_histogram(self, axis):
-        axis.hist(self.df["temperature"], bins=20, color="#A7D8F0", edgecolor="white", linewidth=0.7)
+        temperature_values = self.df["temperature"].dropna()
+        min_temperature = np.floor(temperature_values.min() * 2) / 2
+        max_temperature = np.ceil(temperature_values.max() * 2) / 2
+        bin_edges = np.arange(min_temperature, max_temperature + 0.5, 0.5)
+        if len(bin_edges) < 2:
+            bin_edges = np.array([min_temperature, min_temperature + 0.5])
+        axis.hist(temperature_values, bins=bin_edges, edgecolor="white")
+        tick_start = np.floor(min_temperature)
+        tick_end = np.ceil(max_temperature)
+        axis.set_xticks(np.arange(tick_start, tick_end + 1, 1))
         axis.set_title("Temperature histogram")
         axis.set_xlabel("Temperature")
         axis.set_ylabel("Count")
@@ -235,16 +238,12 @@ class TemperatureAnalysisDashboard(QMainWindow):
     def draw_line_chart(self, axis, include_anomalies=False):
         line_chart_data = self.df.sort_values("timestamp")
         if include_anomalies:
-            line_color_map = colormaps["tab10"]
-            sensors_count = line_chart_data["sensor_id"].nunique()
             anomaly_label_added = False
-            for index, (sensor_id, sensor_data) in enumerate(line_chart_data.groupby("sensor_id")):
-                color_position = index / max(sensors_count - 1, 1)
+            for sensor_id, sensor_data in line_chart_data.groupby("sensor_id"):
                 axis.plot(
                     sensor_data["timestamp"],
                     sensor_data["temperature"],
                     label=str(sensor_id),
-                    color=line_color_map(color_position),
                 )
                 sensor_std = sensor_data["temperature"].std()
                 sensor_mean = sensor_data["temperature"].mean()
@@ -253,7 +252,6 @@ class TemperatureAnalysisDashboard(QMainWindow):
                     axis.scatter(
                         anomalies["timestamp"],
                         anomalies["temperature"],
-                        color="red",
                         marker="x",
                         label="Anomaly" if not anomaly_label_added else None,
                     )
@@ -264,7 +262,14 @@ class TemperatureAnalysisDashboard(QMainWindow):
         axis.set_title("Temperature over time")
         axis.set_xlabel("Time")
         axis.set_ylabel("Temperature")
-        axis.legend()
+        legend_handles, legend_labels = axis.get_legend_handles_labels()
+        if "Anomaly" in legend_labels:
+            anomaly_index = legend_labels.index("Anomaly")
+            anomaly_handle = legend_handles.pop(anomaly_index)
+            legend_labels.pop(anomaly_index)
+            legend_handles.append(anomaly_handle)
+            legend_labels.append("Anomaly")
+        axis.legend(legend_handles, legend_labels, loc="upper right")
         return line_chart_data
 
     def load_csv(self, csv_file_path):
@@ -321,6 +326,7 @@ class TemperatureAnalysisDashboard(QMainWindow):
 
     def refresh_datetime_filters(self):
         if self.original_df.empty:
+            self.filters_frame.datetime_range_widget.setVisible(False)
             self.filters_frame.datetime_from_label.setVisible(False)
             self.filters_frame.datetime_from_edit.setVisible(False)
             self.filters_frame.datetime_to_label.setVisible(False)
@@ -331,6 +337,7 @@ class TemperatureAnalysisDashboard(QMainWindow):
             self.filters_frame.datetime_from_edit.blockSignals(False)
             self.filters_frame.datetime_to_edit.blockSignals(False)
             return
+        self.filters_frame.datetime_range_widget.setVisible(True)
         min_timestamp = self.original_df["timestamp"].min()
         max_timestamp = self.original_df["timestamp"].max()
         min_qdatetime = self.filters_frame.datetime_from_edit.dateTimeFromText(
@@ -359,7 +366,9 @@ class TemperatureAnalysisDashboard(QMainWindow):
         clear_layout(self.filters_frame.sensors_values_layout)
         self.sensor_checkboxes = {}
         if self.original_df.empty:
+            self.filters_frame.sensors_widget.setVisible(False)
             return
+        self.filters_frame.sensors_widget.setVisible(True)
         for sensor_id in sorted(self.original_df["sensor_id"].dropna().unique()):
             checkbox = QCheckBox(str(sensor_id))
             checkbox.setChecked(True)
@@ -404,7 +413,7 @@ class TemperatureAnalysisDashboard(QMainWindow):
         story.append(Spacer(1, 12))
         story.append(Paragraph("Statistics", styles["Heading2"]))
         story.append(Spacer(1, 4))
-        story.append(Paragraph("Global statistics (all sensors)", styles["Heading3"]))
+        story.append(Paragraph("Global statistics (all filtered sensors)", styles["Heading3"]))
         story.append(
             Preformatted(
                 self.df["temperature"].describe().to_string(float_format=lambda value: f"{value:.2f}"),
@@ -451,7 +460,7 @@ class TemperatureAnalysisDashboard(QMainWindow):
         figures.append(("Temperature boxplot by sensor", fig3))
         fig4 = Figure(figsize=(8, 4), tight_layout=True)
         ax4 = fig4.add_subplot(1, 1, 1)
-        self.draw_heatmap(ax4, with_colorbar=True)
+        self.draw_heatmap(ax4)
         figures.append(("Temperature heatmap", fig4))
         return figures
 
@@ -547,7 +556,7 @@ class TemperatureAnalysisDashboard(QMainWindow):
         self.results_tabs.stats_scroll_area.setVisible(True)
         clear_layout(self.results_tabs.stats_frames_layout)
 
-        global_stats_box = QGroupBox("Global statistics (all sensors)")
+        global_stats_box = QGroupBox("Global statistics (all filtered sensors)")
         global_stats_layout = QVBoxLayout(global_stats_box)
         global_stats_label = QLabel(
             self.df["temperature"].describe().to_string(float_format=lambda value: f"{value:.1f}")
@@ -594,7 +603,7 @@ class TemperatureAnalysisDashboard(QMainWindow):
         line_chart_axis.set_xticklabels(x_tick_labels, rotation=90, fontsize=6)
         self.draw_histogram(histogram_axis)
         self.draw_boxplot(boxplot_axis)
-        self.draw_heatmap(heatmap_axis, include_time_ticks=True)
+        self.draw_heatmap(heatmap_axis)
         self.results_tabs.charts_canvas.draw_idle()
 
 
