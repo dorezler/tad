@@ -23,6 +23,7 @@ from PyQt6.QtWidgets import (
 from constants import (
     BANNER_FILE_PATH,
     BANNER_HEIGHT,
+    DATETIME_FORMAT_QT,
     DATA_TAB_TITLE,
     FILTERS_DATETIME_RANGE_LABEL_TEXT,
     FILTERS_FROM_LABEL_TEXT,
@@ -31,22 +32,22 @@ from constants import (
     FILTERS_SENSORS_LABEL_TEXT,
     FILTERS_SENSORS_SPACING,
     FILTERS_TO_LABEL_TEXT,
-    MESSAGE_INITIAL_DATA,
     LOAD_FROM_DISK_TEXT,
     LOAD_FROM_NETWORK_TEXT,
     LOAD_GROUP_TITLE,
-    DATETIME_FORMAT_QT,
+    MESSAGE_INITIAL_DATA,
     SAVE_AS_TEXT,
     SAVE_GROUP_TITLE,
-    STATISTICS_TAB_TITLE,
     STATISTICS_COLUMNS,
     STATISTICS_HORIZONTAL_MARGIN,
     STATISTICS_SPACING,
+    STATISTICS_TAB_TITLE,
     SUPPORTED_LOAD_FORMATS_TEXT,
     SUPPORTED_SAVE_FORMATS_TEXT,
     VISUALIZATIONS_FIGURE_SIZE,
     VISUALIZATIONS_TAB_TITLE,
 )
+from utils import format_float
 
 
 class Banner(QWidget):
@@ -81,11 +82,11 @@ class DataTableTab(QWidget):
         self.label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(self.label)
         self.table = QTableWidget()
-        self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        self.table.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
+        self.table.horizontalHeader().sectionClicked.connect(on_table_header_clicked)
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.table.horizontalHeader().setSortIndicatorShown(True)
-        self.table.horizontalHeader().sectionClicked.connect(on_table_header_clicked)
+        self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.table.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
         self.table.setVisible(False)
         layout.addWidget(self.table)
 
@@ -102,8 +103,8 @@ class DateTimeRangeFilter(QWidget):
         self.from_label.setVisible(False)
         layout.addWidget(self.from_label)
         self.from_edit = QDateTimeEdit()
-        self.from_edit.setDisplayFormat(DATETIME_FORMAT_QT)
         self.from_edit.setCalendarPopup(True)
+        self.from_edit.setDisplayFormat(DATETIME_FORMAT_QT)
         self.from_edit.setVisible(False)
         self.from_edit.dateTimeChanged.connect(apply_filters_callback)
         layout.addWidget(self.from_edit)
@@ -111,8 +112,8 @@ class DateTimeRangeFilter(QWidget):
         self.to_label.setVisible(False)
         layout.addWidget(self.to_label)
         self.to_edit = QDateTimeEdit()
-        self.to_edit.setDisplayFormat(DATETIME_FORMAT_QT)
         self.to_edit.setCalendarPopup(True)
+        self.to_edit.setDisplayFormat(DATETIME_FORMAT_QT)
         self.to_edit.setVisible(False)
         self.to_edit.dateTimeChanged.connect(apply_filters_callback)
         layout.addWidget(self.to_edit)
@@ -145,10 +146,10 @@ class LoadSaveSection(QWidget):
         """Arrange a `LoadSection` and a `SaveSection` horizontally."""
         super().__init__()
         layout = QHBoxLayout(self)
-        self.load_section = LoadSection(open_file_callback, open_network_callback)
-        layout.addWidget(self.load_section)
-        self.save_section = SaveSection(save_file_callback)
-        layout.addWidget(self.save_section)
+        load_section = LoadSection(open_file_callback, open_network_callback)
+        layout.addWidget(load_section)
+        save_section = SaveSection(save_file_callback)
+        layout.addWidget(save_section)
 
 
 class LoadSection(QGroupBox):
@@ -178,8 +179,8 @@ class ResultsTabs(QTabWidget):
         self.addTab(self.data_tab, DATA_TAB_TITLE)
         self.stats_tab = StatisticsTab()
         self.addTab(self.stats_tab, STATISTICS_TAB_TITLE)
-        self.viz_tab = VisualizationsTab()
-        self.addTab(self.viz_tab, VISUALIZATIONS_TAB_TITLE)
+        self.visualizations_tab = VisualizationsTab()
+        self.addTab(self.visualizations_tab, VISUALIZATIONS_TAB_TITLE)
 
 
 class SaveSection(QGroupBox):
@@ -204,11 +205,11 @@ class SensorFilter(QWidget):
         super().__init__()
         layout = QHBoxLayout(self)
         layout.addWidget(QLabel(FILTERS_SENSORS_LABEL_TEXT))
-        self.values_widget = QWidget()
-        self.values_layout = QHBoxLayout(self.values_widget)
+        values_widget = QWidget()
+        self.values_layout = QHBoxLayout(values_widget)
         self.values_layout.setContentsMargins(0, 0, 0, 0)
         self.values_layout.setSpacing(FILTERS_SENSORS_SPACING)
-        layout.addWidget(self.values_widget)
+        layout.addWidget(values_widget)
         self.setVisible(False)
 
 
@@ -222,17 +223,17 @@ class StatisticsTab(QWidget):
         self.label = QLabel(MESSAGE_INITIAL_DATA)
         self.label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(self.label)
-        self.frames_container = QWidget()
-        self.frames_layout = QGridLayout(self.frames_container)
-        self.frames_layout.setContentsMargins(STATISTICS_HORIZONTAL_MARGIN, 0, STATISTICS_HORIZONTAL_MARGIN, 0)
+        frames_container = QWidget()
+        self.frames_layout = QGridLayout(frames_container)
         self.frames_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        self.frames_layout.setContentsMargins(STATISTICS_HORIZONTAL_MARGIN, 0, STATISTICS_HORIZONTAL_MARGIN, 0)
         self.frames_layout.setHorizontalSpacing(STATISTICS_SPACING)
         self.frames_layout.setVerticalSpacing(STATISTICS_SPACING)
         for column_index in range(STATISTICS_COLUMNS):
             self.frames_layout.setColumnStretch(column_index, 1)
         self.scroll_area = QScrollArea()
+        self.scroll_area.setWidget(frames_container)
         self.scroll_area.setWidgetResizable(True)
-        self.scroll_area.setWidget(self.frames_container)
         self.scroll_area.setVisible(False)
         layout.addWidget(self.scroll_area)
 
@@ -256,7 +257,7 @@ def build_stats_box(title, series):
     """Create and return a selectable-text QGroupBox with statistics for `series`."""
     box = QGroupBox(title)
     layout = QVBoxLayout(box)
-    label = QLabel(series.describe().to_string(float_format=lambda v: f"{v:.1f}"))
+    label = QLabel(series.describe().to_string(float_format=format_float))
     label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
     layout.addWidget(label)
     return box
@@ -273,18 +274,22 @@ def clear_layout(layout):
 
 def set_datetime_filter_bounds(dt_filter, min_qdatetime, max_qdatetime):
     """Configure picker min/max/current values while blocking signals to prevent re-filtering."""
+    # Block date-time change signals while programmatically updating picker bounds and values.
     dt_filter.from_edit.blockSignals(True)
     dt_filter.to_edit.blockSignals(True)
-    dt_filter.from_edit.setMinimumDateTime(min_qdatetime)
-    dt_filter.from_edit.setMaximumDateTime(max_qdatetime)
+    # Apply new limits and current values, then reveal date-time controls.
     dt_filter.from_edit.setDateTime(min_qdatetime)
-    dt_filter.to_label.setVisible(True)
-    dt_filter.to_edit.setVisible(True)
-    dt_filter.to_edit.setMinimumDateTime(min_qdatetime)
-    dt_filter.to_edit.setMaximumDateTime(max_qdatetime)
-    dt_filter.to_edit.setDateTime(max_qdatetime)
-    dt_filter.from_label.setVisible(True)
+    dt_filter.from_edit.setMaximumDateTime(max_qdatetime)
+    dt_filter.from_edit.setMinimumDateTime(min_qdatetime)
     dt_filter.from_edit.setVisible(True)
+    dt_filter.from_label.setVisible(True)
+    dt_filter.to_edit.setDateTime(max_qdatetime)
+    dt_filter.to_edit.setMaximumDateTime(max_qdatetime)
+    dt_filter.to_edit.setMinimumDateTime(min_qdatetime)
+    dt_filter.to_edit.setVisible(True)
+    dt_filter.to_label.setVisible(True)
+    # Re-enable signals after all updates are complete.
     dt_filter.from_edit.blockSignals(False)
     dt_filter.to_edit.blockSignals(False)
+    # Show reset action once controls are fully initialized.
     dt_filter.reset_button.setVisible(True)

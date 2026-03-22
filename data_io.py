@@ -1,4 +1,4 @@
-"""TAD – data loading, normalisation and saving helpers."""
+"""TAD – data loading, normalization and saving helpers."""
 
 import io
 
@@ -13,7 +13,9 @@ from constants import (
     FILE_EXT_JSON,
     FILE_EXT_PDF,
     FORMAT_JSON_DATE,
+    FORMAT_JSON_INDENT,
     FORMAT_JSON_ORIENT,
+    NETWORK_REQUEST_TIMEOUT,
 )
 from report import export_pdf_report
 
@@ -35,13 +37,10 @@ def load_dataframe_from_json(json_file_path):
     return pd.read_json(json_file_path, orient=FORMAT_JSON_ORIENT)
 
 
-def load_dataframe_from_url(url, timeout=10):
+def load_dataframe_from_url(url, timeout=NETWORK_REQUEST_TIMEOUT):
     """Download tabular data from `url` and return it as a `DataFrame`."""
-    try:
-        response = requests.get(url, timeout=timeout)
-        response.raise_for_status()
-    except requests.RequestException as error:
-        raise RuntimeError(str(error)) from error
+    response = requests.get(url, timeout=timeout)
+    response.raise_for_status()
     try:
         return pd.DataFrame.from_records(response.json())
     except ValueError:
@@ -58,21 +57,21 @@ def normalize_loaded_data(df):
 def save_dataframe(df, file_path, selected_filter):
     """Save `df` to CSV, JSON or PDF based on dialog filter and file extension."""
     file_path_lower = file_path.lower()
-    if file_path_lower.endswith(FILE_EXT_JSON):
+    if file_path_lower.endswith(FILE_EXT_CSV):
+        target_extension = FILE_EXT_CSV
+    elif file_path_lower.endswith(FILE_EXT_JSON):
         target_extension = FILE_EXT_JSON
     elif file_path_lower.endswith(FILE_EXT_PDF):
         target_extension = FILE_EXT_PDF
-    elif file_path_lower.endswith(FILE_EXT_CSV):
-        target_extension = FILE_EXT_CSV
     else:
         target_extension = FILE_DIALOG_SAVE_FILTER_TO_EXTENSION.get(selected_filter, FILE_EXT_CSV)
     if target_extension == FILE_EXT_JSON:
         file_path = ensure_extension(file_path, FILE_EXT_JSON)
-        df.to_json(file_path, date_format=FORMAT_JSON_DATE, indent=2, orient=FORMAT_JSON_ORIENT)
+        df.to_json(file_path, date_format=FORMAT_JSON_DATE, indent=FORMAT_JSON_INDENT, orient=FORMAT_JSON_ORIENT)
         return file_path, FILE_EXT_JSON
     if target_extension == FILE_EXT_PDF:
         file_path = ensure_extension(file_path, FILE_EXT_PDF)
-        export_pdf_report(df, file_path, include_stats=True, include_viz=True)
+        export_pdf_report(df, file_path)
         return file_path, FILE_EXT_PDF
     file_path = ensure_extension(file_path, FILE_EXT_CSV)
     df.to_csv(file_path, index=False)
