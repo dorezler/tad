@@ -1,5 +1,7 @@
 """TAD – reusable Qt widget classes and helpers."""
 
+from pathlib import Path
+
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
 from matplotlib.figure import Figure
 from PyQt6.QtCore import Qt
@@ -57,7 +59,10 @@ class Banner(QWidget):
         """Set up the fixed-height SVG widget inside a vertical layout."""
         super().__init__()
         layout = QVBoxLayout(self)
-        banner_widget = QSvgWidget(BANNER_FILE_PATH)
+        banner_path = Path(__file__).parent / BANNER_FILE_PATH
+        if not banner_path.exists():
+            raise FileNotFoundError(f"Banner file not found: {banner_path}")
+        banner_widget = QSvgWidget(str(banner_path))
         banner_widget.setFixedHeight(BANNER_HEIGHT)
         layout.addWidget(banner_widget)
 

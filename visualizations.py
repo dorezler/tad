@@ -43,28 +43,28 @@ from constants import (
 def build_pdf_figures(df):
     """Create and return a list of `(caption, Figure)` tuples for PDF export."""
     figures = []
-    fig = Figure(figsize=PDF_CHART_SIZE, tight_layout=True)
-    ax = fig.add_subplot(1, 1, 1)
-    line_chart_data = draw_line_chart(df, ax)
-    configure_chart_xticks(ax, line_chart_data[COLUMN_TIMESTAMP].unique())
-    figures.append((LINE_CHART_TITLE, fig))
-    fig2 = Figure(figsize=PDF_CHART_SIZE, tight_layout=True)
-    ax2 = fig2.add_subplot(1, 1, 1)
-    draw_histogram(df, ax2)
-    figures.append((HISTOGRAM_TITLE, fig2))
-    fig3 = Figure(figsize=PDF_CHART_SIZE, tight_layout=True)
-    ax3 = fig3.add_subplot(1, 1, 1)
-    draw_boxplot(df, ax3)
-    figures.append((BOXPLOT_TITLE, fig3))
-    fig4 = Figure(figsize=PDF_CHART_SIZE, tight_layout=True)
-    ax4 = fig4.add_subplot(1, 1, 1)
-    heatmap_data = draw_heatmap(df, ax4)
+    fig_line = Figure(figsize=PDF_CHART_SIZE, tight_layout=True)
+    ax_line = fig_line.add_subplot(1, 1, 1)
+    line_chart_data = draw_line_chart(df, ax_line)
+    configure_chart_xticks(ax_line, line_chart_data[COLUMN_TIMESTAMP].unique())
+    figures.append((LINE_CHART_TITLE, fig_line))
+    fig_histogram = Figure(figsize=PDF_CHART_SIZE, tight_layout=True)
+    ax_histogram = fig_histogram.add_subplot(1, 1, 1)
+    draw_histogram(df, ax_histogram)
+    figures.append((HISTOGRAM_TITLE, fig_histogram))
+    fig_boxplot = Figure(figsize=PDF_CHART_SIZE, tight_layout=True)
+    ax_boxplot = fig_boxplot.add_subplot(1, 1, 1)
+    draw_boxplot(df, ax_boxplot)
+    figures.append((BOXPLOT_TITLE, fig_boxplot))
+    fig_heatmap = Figure(figsize=PDF_CHART_SIZE, tight_layout=True)
+    ax_heatmap = fig_heatmap.add_subplot(1, 1, 1)
+    heatmap_data = draw_heatmap(df, ax_heatmap)
     configure_chart_xticks(
-        ax4,
+        ax_heatmap,
         heatmap_data.columns.tolist(),
         tick_values=np.arange(len(heatmap_data.columns)),
     )
-    figures.append((HEATMAP_TITLE, fig4))
+    figures.append((HEATMAP_TITLE, fig_heatmap))
     return figures
 
 
@@ -77,9 +77,14 @@ def configure_chart_xticks(axis, timestamps, tick_values=None):
 
 def configure_xticks_with_formatted_labels(axis, timestamps, tick_values):
     """Configure x-axis ticks and labels with formatted timestamps from `timestamps` applied to `tick_values`."""
+    if len(timestamps) == 0:
+        return
     tick_values = np.asarray(tick_values)
     x_tick_indices = np.linspace(0, len(timestamps) - 1, LINE_CHART_X_TICKS_COUNT).astype(int)
-    x_tick_labels = [timestamps[i].strftime(LINE_CHART_TICK_LABEL_FORMAT) for i in x_tick_indices]
+    if hasattr(timestamps[0], "strftime"):
+        x_tick_labels = [timestamps[i].strftime(LINE_CHART_TICK_LABEL_FORMAT) for i in x_tick_indices]
+    else:
+        x_tick_labels = [str(timestamps[i]) for i in x_tick_indices]
     axis.set_xticks(tick_values[x_tick_indices])
     axis.set_xticklabels(
         x_tick_labels,
@@ -90,8 +95,9 @@ def configure_xticks_with_formatted_labels(axis, timestamps, tick_values):
 
 def draw_boxplot(df, axis):
     """Draw a per-sensor temperature boxplot on `axis`."""
-    grouped = [sensor_data[COLUMN_TEMPERATURE] for _, sensor_data in df.groupby(COLUMN_SENSOR_ID)]
-    labels = [str(sensor_id) for sensor_id in df[COLUMN_SENSOR_ID].unique()]
+    grouped_data = df.groupby(COLUMN_SENSOR_ID)
+    grouped = [sensor_data[COLUMN_TEMPERATURE] for _, sensor_data in grouped_data]
+    labels = [str(sensor_id) for sensor_id, _ in grouped_data]
     axis.boxplot(grouped, tick_labels=labels)
     axis.set_title(BOXPLOT_TITLE)
     axis.set_xlabel(BOXPLOT_X_LABEL_TEXT)
@@ -100,7 +106,9 @@ def draw_boxplot(df, axis):
 
 def draw_heatmap(df, axis):
     """Draw a sensor × time temperature heatmap on `axis`."""
-    heatmap_data = df.pivot(index=COLUMN_SENSOR_ID, columns=COLUMN_TIMESTAMP, values=COLUMN_TEMPERATURE)
+    heatmap_data = df.pivot_table(
+        index=COLUMN_SENSOR_ID, columns=COLUMN_TIMESTAMP, values=COLUMN_TEMPERATURE, aggfunc="mean"
+    )
     image = axis.imshow(heatmap_data, aspect=HEATMAP_ASPECT, cmap=HEATMAP_CMAP)
     axis.set_title(HEATMAP_TITLE)
     axis.set_xlabel(HEATMAP_X_LABEL_TEXT)

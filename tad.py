@@ -9,6 +9,7 @@ from PyQt6.QtWidgets import (
     QFileDialog,
     QInputDialog,
     QMainWindow,
+    QMessageBox,
     QTableWidgetItem,
     QVBoxLayout,
     QWidget,
@@ -19,7 +20,6 @@ from constants import (
     COLUMN_TEMPERATURE,
     COLUMN_TIMESTAMP,
     DATETIME_FORMAT_PY,
-    DATETIME_FORMAT_QT,
     FILE_DIALOG_OPEN_DATA_FILE_FILTER,
     FILE_DIALOG_OPEN_DATA_FILE_TITLE,
     FILE_DIALOG_SAVE_DATA_FILE_FILTER,
@@ -71,7 +71,7 @@ from widgets import (
 )
 
 
-class TemperatureAnalysisDashboard(QMainWindow):  # pylint: disable=too-many-instance-attributes,too-many-public-methods
+class TemperatureAnalysisDashboard(QMainWindow):
     """Main application window orchestrating data loading, filtering and display."""
 
     # Setup
@@ -117,8 +117,10 @@ class TemperatureAnalysisDashboard(QMainWindow):  # pylint: disable=too-many-ins
                 self.original_df = load_dataframe_from_csv(file_path)
             elif file_path.lower().endswith(FILE_EXT_JSON):
                 self.original_df = load_dataframe_from_json(file_path)
+            else:
+                return
             self.process_loaded_data(file_path)
-        except Exception as error:
+        except (KeyError, OSError, ValueError) as error:
             self.statusBar().showMessage(STATUS_FILE_LOAD_FAILED_TEMPLATE.format(error=error))
 
     def open_network_file(self):
@@ -135,11 +137,14 @@ class TemperatureAnalysisDashboard(QMainWindow):  # pylint: disable=too-many-ins
             return
         try:
             self.process_loaded_data(url)
-        except Exception as error:
+        except (KeyError, ValueError) as error:
             self.statusBar().showMessage(STATUS_FILE_LOAD_FAILED_TEMPLATE.format(error=error))
 
     def save_file(self):
         """Open a save dialog and export the filtered data to CSV, JSON or PDF."""
+        if self.df.empty:
+            QMessageBox.warning(self, "No data to save", "Load and filter data before saving.")
+            return
         file_path, selected_filter = QFileDialog.getSaveFileName(
             self,
             FILE_DIALOG_SAVE_DATA_FILE_TITLE,
@@ -150,7 +155,7 @@ class TemperatureAnalysisDashboard(QMainWindow):  # pylint: disable=too-many-ins
             return
         try:
             file_path, saved_format = save_dataframe(self.df, file_path, selected_filter)
-        except Exception as error:
+        except (IOError, OSError, ValueError) as error:
             self.statusBar().showMessage(STATUS_FILE_SAVE_FAILED_TEMPLATE.format(error=error))
             return
         if saved_format == FILE_EXT_PDF:
@@ -220,7 +225,7 @@ class TemperatureAnalysisDashboard(QMainWindow):  # pylint: disable=too-many-ins
             return
         self.filters_frame.setVisible(True)
         self.filters_frame.sensor_filter.setVisible(True)
-        for sensor_id in sorted(self.original_df[COLUMN_SENSOR_ID].dropna().unique()):
+        for sensor_id in sorted(self.original_df[COLUMN_SENSOR_ID].dropna().unique(), key=str):
             checkbox = QCheckBox(str(sensor_id))
             checkbox.setChecked(True)
             checkbox.stateChanged.connect(self.apply_filters)
@@ -240,8 +245,10 @@ class TemperatureAnalysisDashboard(QMainWindow):  # pylint: disable=too-many-ins
         """Narrow `self.df` to the date/time range currently set in the picker widgets."""
         dt_filter = self.filters_frame.datetime_range_filter
         if not self.df.empty and not dt_filter.from_edit.isHidden() and not dt_filter.to_edit.isHidden():
-            from_timestamp = pd.to_datetime(dt_filter.from_edit.dateTime().toString(DATETIME_FORMAT_QT))
-            to_timestamp = pd.to_datetime(dt_filter.to_edit.dateTime().toString(DATETIME_FORMAT_QT))
+            from_datetime = dt_filter.from_edit.dateTime().toPyDateTime()
+            to_datetime = dt_filter.to_edit.dateTime().toPyDateTime()
+            from_timestamp = pd.Timestamp(from_datetime)
+            to_timestamp = pd.Timestamp(to_datetime)
             self.df = self.df[
                 (self.df[COLUMN_TIMESTAMP] >= from_timestamp) & (self.df[COLUMN_TIMESTAMP] <= to_timestamp)
             ]
@@ -252,7 +259,10 @@ class TemperatureAnalysisDashboard(QMainWindow):  # pylint: disable=too-many-ins
         """Populate the table widget with rows from the filtered `DataFrame`."""
         data_tab = self.results_tabs.data_tab
         if self.df.empty:
-            data_tab.label.setText(MESSAGE_NO_DATA_FOR_FILTERS)
+            if self.original_df.empty:
+                data_tab.label.setText(MESSAGE_INITIAL_DATA)
+            else:
+                data_tab.label.setText(MESSAGE_NO_DATA_FOR_FILTERS)
             data_tab.label.setVisible(True)
             data_tab.table.setVisible(False)
             return
@@ -267,8 +277,8 @@ class TemperatureAnalysisDashboard(QMainWindow):  # pylint: disable=too-many-ins
         data_tab.table.setRowCount(len(display_df))
         data_tab.table.setVisible(True)
         self.sync_sort_indicator(data_tab.table, display_df)
-        for row_index, (_, row) in enumerate(display_df.iterrows()):
-            for column_index, value in enumerate(row):
+        for row_index, row_tuple in enumerate(display_df.itertuples(index=False)):
+            for column_index, value in enumerate(row_tuple):
                 data_tab.table.setItem(row_index, column_index, QTableWidgetItem(str(value)))
 
     def update_statistics(self):

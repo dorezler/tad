@@ -1,6 +1,7 @@
 """TAD – data loading, normalization and saving helpers."""
 
 import io
+import json
 
 import pandas as pd
 import requests
@@ -43,12 +44,15 @@ def load_dataframe_from_url(url, timeout=NETWORK_REQUEST_TIMEOUT):
     response.raise_for_status()
     try:
         return pd.DataFrame.from_records(response.json())
-    except ValueError:
+    except json.JSONDecodeError:
         return pd.read_csv(io.StringIO(response.text))
 
 
 def normalize_loaded_data(df):
     """Return a normalized copy of loaded data with required columns and parsed timestamps."""
+    missing_columns = set(COLUMN_NAMES) - set(df.columns)
+    if missing_columns:
+        raise ValueError(f"Missing required columns: {', '.join(sorted(missing_columns))}")
     normalized_df = df[list(COLUMN_NAMES)].copy()
     normalized_df[COLUMN_TIMESTAMP] = pd.to_datetime(normalized_df[COLUMN_TIMESTAMP])
     return normalized_df

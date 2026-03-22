@@ -105,7 +105,7 @@ STATUS_FILE_LOAD_FAILED_TEMPLATE = "Failed to load data: {error}"
 STATUS_FILE_SAVE_FAILED_TEMPLATE = "Failed to save file: {error}"
 STATUS_LOAD_TEMPLATE = "Loaded {data_source} ({rows} rows)."
 STATUS_NETWORK_LOAD_FAILED_TEMPLATE = "Failed to load data from network: {error}"
-STATUS_READY_MESSAGE = MESSAGE_INITIAL_DATA
+STATUS_READY_MESSAGE = "Ready."
 STATUS_SAVE_PDF_TEMPLATE = "Exported PDF report to {file_path}."
 STATUS_SAVE_ROWS_TEMPLATE = "Saved data to {file_path} ({rows} rows)."
 
